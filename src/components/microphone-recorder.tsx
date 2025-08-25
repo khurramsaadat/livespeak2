@@ -70,10 +70,14 @@ export function MicrophoneRecorder({
   const [transcription, setTranscription] = useState('');
   const [isProcessing, setIsProcessing] = useState(false);
   const [isProduction, setIsProduction] = useState(false);
+  const [retryCount, setRetryCount] = useState(0);
+  const [lastError, setLastError] = useState<string>('');
   const isRecognitionRunningRef = useRef(false);
   const accumulatedTranscriptRef = useRef('');
   const pendingTranscriptionRef = useRef('');
   const pendingInterimRef = useRef('');
+  const maxRetries = 3;
+  const retryDelay = 2000; // 2 seconds between retries
 
   // Check if we're in production
   useEffect(() => {
@@ -86,6 +90,8 @@ export function MicrophoneRecorder({
     pendingTranscriptionRef.current = '';
     pendingInterimRef.current = '';
     setTranscription('');
+    setRetryCount(0);
+    setLastError('');
     onClearTranscription();
   }, [onClearTranscription]);
 
@@ -135,16 +141,23 @@ export function MicrophoneRecorder({
 
       recognitionRef.current.onend = function () {
         console.log('Speech recognition ended');
-        // Only stop if user didn't manually stop
-        if (isRecording) {
-          console.log('Recognition ended unexpectedly, attempting to restart...');
-          // Try to restart after a short delay
+        // Only try to restart if user didn't manually stop and we haven't exceeded retries
+        if (isRecording && !isRecognitionRunningRef.current && retryCount < maxRetries) {
+          console.log(`Recognition ended unexpectedly, attempting to restart... (attempt ${retryCount + 1}/${maxRetries})`);
+          setRetryCount(prev => prev + 1);
+          
+          // Try to restart after a delay
           setTimeout(() => {
-            if (isRecording && !isRecognitionRunningRef.current) {
+            if (isRecording && !isRecognitionRunningRef.current && retryCount < maxRetries) {
               console.log('Attempting to restart recognition...');
               startRecognition();
             }
-          }, 1000);
+          }, retryDelay);
+        } else if (retryCount >= maxRetries) {
+          console.log('Max retries reached, stopping recognition');
+          setTranscription('Maximum retry attempts reached. Please try starting recording again.');
+          setIsRecording(false);
+          setRetryCount(0);
         }
         isRecognitionRunningRef.current = false;
       };
@@ -184,26 +197,39 @@ export function MicrophoneRecorder({
         
         if (event.error === 'network') {
           console.log('Network error - speech recognition may be limited');
-          // Don't stop recording on network errors, just log them
-          // The recognition will continue trying
+          setLastError('Network error - speech recognition may be limited');
+          // Don't stop recording on network errors, but limit retries
+          if (retryCount >= maxRetries) {
+            console.log('Max retries reached for network errors, stopping');
+            setTranscription('Network error: Maximum retry attempts reached. Please try again later.');
+            setIsRecording(false);
+            isRecognitionRunningRef.current = false;
+            setRetryCount(0);
+          }
         } else if (event.error === 'not-allowed') {
           console.log('Microphone access denied');
+          setLastError('Microphone access denied');
           setTranscription('Microphone access denied. Please allow microphone permissions and try again.');
           setIsRecording(false);
           isRecognitionRunningRef.current = false;
+          setRetryCount(0);
         } else if (event.error === 'no-speech') {
           console.log('No speech detected');
+          setLastError('No speech detected');
           // Don't show error for no-speech, just log it
         } else if (event.error === 'aborted') {
           console.log('Speech recognition aborted');
+          setLastError('Speech recognition aborted');
           // Don't show error for aborted, just log it
         } else {
           console.log('Unknown speech recognition error:', event.error);
+          setLastError(`Unknown error: ${event.error}`);
           // Only stop on critical errors
           if (event.error !== 'network') {
             setTranscription(`Speech recognition error: ${event.error}. Please try again.`);
             setIsRecording(false);
             isRecognitionRunningRef.current = false;
+            setRetryCount(0);
           }
         }
       };
@@ -234,6 +260,25 @@ export function MicrophoneRecorder({
     isRecognitionRunningRef.current = false;
     recognitionRef.current = null;
   }, []);
+
+  // Function to manually reset and try again
+  const resetAndRetry = useCallback(() => {
+    console.log('Manual reset and retry requested');
+    setRetryCount(0);
+    setLastError('');
+    setTranscription('');
+    accumulatedTranscriptRef.current = '';
+    
+    if (isRecording) {
+      // Stop current recording and restart
+      stopRecognition();
+      setTimeout(() => {
+        if (isRecording) {
+          startRecognition();
+        }
+      }, 500);
+    }
+  }, [isRecording, stopRecognition, startRecognition]);
 
   const translateText = useCallback(async (text: string) => {
     if (!text) return;
@@ -348,6 +393,35 @@ export function MicrophoneRecorder({
                 <li>Try a different browser (Chrome recommended)</li>
                 <li>Refresh the page if needed</li>
               </ul>
+            </div>
+          )}
+
+          {/* Show retry status and errors */}
+          {(retryCount > 0 || lastError) && (
+            <div className="mt-4 p-3 bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 rounded-lg">
+              <p className="text-sm text-blue-800 dark:text-blue-200 font-medium">
+                🔄 Recognition Status
+              </p>
+              {retryCount > 0 && (
+                <p className="text-xs text-blue-700 dark:text-blue-300 mt-1">
+                  Retry attempts: {retryCount}/{maxRetries}
+                </p>
+              )}
+              {lastError && (
+                <p className="text-xs text-blue-700 dark:text-blue-300 mt-1">
+                  Last error: {lastError}
+                </p>
+              )}
+              {retryCount >= maxRetries && (
+                <div className="mt-2">
+                  <button
+                    onClick={resetAndRetry}
+                    className="text-xs bg-blue-500 hover:bg-blue-600 text-white px-3 py-1 rounded"
+                  >
+                    Reset & Try Again
+                  </button>
+                </div>
+              )}
             </div>
           )}
         </div>
