@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { MicrophoneRecorder } from "@/components/microphone-recorder";
+import MicrophoneRecorder from "@/components/microphone-recorder";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import {
   Select,
@@ -224,9 +224,39 @@ export default function Home() {
                   <SelectValue placeholder="Select source language" />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="en">English (US)</SelectItem>
-                  <SelectItem value="ar">Arabic</SelectItem>
-                  <SelectItem value="bn">Bengali</SelectItem>
+                  <SelectItem value="en">
+                    <div className="flex items-center space-x-3">
+                      <div className="w-6 h-4 bg-gradient-to-r from-blue-600 to-red-600 rounded-sm flex items-center justify-center">
+                        <span className="text-white text-xs font-bold">US</span>
+                      </div>
+                      <div className="flex flex-col">
+                        <span className="font-medium">English</span>
+                        <span className="text-xs text-gray-500">English (US)</span>
+                      </div>
+                    </div>
+                  </SelectItem>
+                  <SelectItem value="ar">
+                    <div className="flex items-center space-x-3">
+                      <div className="w-6 h-4 bg-gradient-to-r from-green-600 to-white to-black rounded-sm flex items-center justify-center">
+                        <span className="text-xs">🇸🇦</span>
+                      </div>
+                      <div className="flex flex-col">
+                        <span className="font-medium">العربية</span>
+                        <span className="text-xs text-gray-500">Arabic</span>
+                      </div>
+                    </div>
+                  </SelectItem>
+                  <SelectItem value="bn">
+                    <div className="flex items-center space-x-3">
+                      <div className="w-6 h-4 bg-gradient-to-r from-green-600 to-red-600 rounded-sm flex items-center justify-center">
+                        <span className="text-xs">🇧🇩</span>
+                      </div>
+                      <div className="flex flex-col">
+                        <span className="font-medium">বাংলা</span>
+                        <span className="text-xs text-gray-500">Bengali</span>
+                      </div>
+                    </div>
+                  </SelectItem>
                 </SelectContent>
               </Select>
             </CardContent>
@@ -249,9 +279,39 @@ export default function Home() {
                   <SelectValue placeholder="Select target language" />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="en">English</SelectItem>
-                  <SelectItem value="ar">Arabic</SelectItem>
-                  <SelectItem value="bn">Bengali</SelectItem>
+                  <SelectItem value="en">
+                    <div className="flex items-center space-x-3">
+                      <div className="w-6 h-4 bg-gradient-to-r from-blue-600 to-red-600 rounded-sm flex items-center justify-center">
+                        <span className="text-white text-xs font-bold">US</span>
+                      </div>
+                      <div className="flex flex-col">
+                        <span className="font-medium">English</span>
+                        <span className="text-xs text-gray-500">English (US)</span>
+                      </div>
+                    </div>
+                  </SelectItem>
+                  <SelectItem value="ar">
+                    <div className="flex items-center space-x-3">
+                      <div className="w-6 h-4 bg-gradient-to-r from-green-600 to-white to-black rounded-sm flex items-center justify-center">
+                        <span className="text-xs">🇸🇦</span>
+                      </div>
+                      <div className="flex flex-col">
+                        <span className="font-medium">العربية</span>
+                        <span className="text-xs text-gray-500">Arabic</span>
+                      </div>
+                    </div>
+                  </SelectItem>
+                  <SelectItem value="bn">
+                    <div className="flex items-center space-x-3">
+                      <div className="w-6 h-4 bg-gradient-to-r from-green-600 to-red-600 rounded-sm flex items-center justify-center">
+                        <span className="text-xs">🇧🇩</span>
+                      </div>
+                      <div className="flex flex-col">
+                        <span className="font-medium">বাংলা</span>
+                        <span className="text-xs text-gray-500">Bengali</span>
+                      </div>
+                    </div>
+                  </SelectItem>
                 </SelectContent>
               </Select>
             </CardContent>

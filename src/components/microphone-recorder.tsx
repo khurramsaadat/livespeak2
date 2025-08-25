@@ -1,21 +1,13 @@
-"use client";
+'use client';
 
 import React, { useState, useRef, useCallback, useEffect } from 'react';
 
-interface MicrophoneRecorderProps {
-  onTranscription: (transcript: string, isFinal: boolean) => void;
-  onTranslation: (translation: string) => void;
-  isRecording: boolean;
-  setIsRecording: (recording: boolean) => void;
-  targetLanguage: string;
-  sourceLanguage: string;
-  onClearTranscription: () => void;
-}
-
+// Web Speech API type definitions
 interface SpeechRecognition extends EventTarget {
   continuous: boolean;
   interimResults: boolean;
   lang: string;
+  maxAlternatives: number;
   start(): void;
   stop(): void;
   onstart: ((this: SpeechRecognition, ev: Event) => void) | null;
@@ -53,31 +45,56 @@ interface SpeechRecognitionErrorEvent extends Event {
 }
 
 interface WindowWithSpeechRecognition extends Window {
-  webkitSpeechRecognition?: new () => SpeechRecognition;
   SpeechRecognition?: new () => SpeechRecognition;
+  webkitSpeechRecognition?: new () => SpeechRecognition;
 }
 
-export function MicrophoneRecorder({
+interface MicrophoneRecorderProps {
+  onTranscription: (text: string, isFinal: boolean) => void;
+  onTranslation: (text: string) => void;
+  onClearTranscription: () => void;
+  sourceLanguage: string;
+  targetLanguage: string;
+  isRecording: boolean;
+  setIsRecording: (recording: boolean) => void;
+}
+
+export default function MicrophoneRecorder({
   onTranscription,
   onTranslation,
-  isRecording,
-  setIsRecording,
-  targetLanguage,
-  sourceLanguage,
   onClearTranscription,
+  sourceLanguage,
+  targetLanguage,
+  isRecording,
+  setIsRecording
 }: MicrophoneRecorderProps) {
-  const recognitionRef = useRef<SpeechRecognition | null>(null);
-  const [transcription, setTranscription] = useState('');
   const [isProcessing, setIsProcessing] = useState(false);
-  const [isProduction, setIsProduction] = useState(false);
   const [retryCount, setRetryCount] = useState(0);
-  const [lastError, setLastError] = useState<string>('');
-  const isRecognitionRunningRef = useRef(false);
-  const accumulatedTranscriptRef = useRef('');
-  const pendingTranscriptionRef = useRef('');
-  const pendingInterimRef = useRef('');
+  const [lastError, setLastError] = useState<string | null>(null);
+  const [isProduction, setIsProduction] = useState(false);
+  
   const maxRetries = 3;
-  const retryDelay = 2000; // 2 seconds between retries
+  const retryDelay = 2000;
+  
+  const recognitionRef = useRef<SpeechRecognition | null>(null);
+  const isRecognitionRunningRef = useRef<boolean>(false);
+  const accumulatedTranscriptRef = useRef<string>('');
+
+  // Language code mapping for Web Speech API
+  const getLanguageCode = useCallback((language: string) => {
+    const languageMap: { [key: string]: string } = {
+      'en': 'en-US',
+      'ar': 'ar-SA', // Saudi Arabic as default
+      'bn': 'bn-BD', // Bangladesh Bengali as default
+      'ar-SA': 'ar-SA', // Saudi Arabic
+      'ar-EG': 'ar-EG', // Egyptian Arabic
+      'ar-PS': 'ar-PS', // Palestinian Arabic
+      'bn-BD': 'bn-BD', // Bangladesh Bengali
+      'bn-IN': 'bn-IN'  // Indian Bengali
+    };
+    
+    return languageMap[language] || 'en-US';
+  }, []);
 
   // Check if we're in production
   useEffect(() => {
@@ -87,84 +104,56 @@ export function MicrophoneRecorder({
   // Function to clear all transcription data
   const clearTranscription = useCallback(() => {
     accumulatedTranscriptRef.current = '';
-    pendingTranscriptionRef.current = '';
-    pendingInterimRef.current = '';
-    setTranscription('');
     setRetryCount(0);
-    setLastError('');
+    setLastError(null);
     onClearTranscription();
   }, [onClearTranscription]);
 
-  const startRecognition = useCallback(() => {
+  const startRecognition = useCallback(async () => {
     if (isRecognitionRunningRef.current) {
-      console.log('Speech recognition already running, skipping...');
-      return;
-    }
-
-    // Check browser compatibility
-    if (!('webkitSpeechRecognition' in window) && !('SpeechRecognition' in window)) {
-      setTranscription('Speech recognition not supported in this browser. Please use Chrome, Edge, or Safari.');
+      console.log('Recognition already running, skipping...');
       return;
     }
 
     try {
       console.log('Starting Web Speech API...');
-      setIsProcessing(true);
-      setIsRecording(true);
       
-      // Create new recognition instance
-      const SpeechRecognitionConstructor = (window as WindowWithSpeechRecognition).webkitSpeechRecognition || (window as WindowWithSpeechRecognition).SpeechRecognition;
-      
-      if (!SpeechRecognitionConstructor) {
-        throw new Error('SpeechRecognition not available in this browser');
-      }
-      
-      recognitionRef.current = new SpeechRecognitionConstructor();
-      
-      if (!recognitionRef.current) {
-        throw new Error('Failed to create SpeechRecognition instance');
+      // Check browser compatibility
+      if (!('webkitSpeechRecognition' in window) && !('SpeechRecognition' in window)) {
+        throw new Error('Speech recognition not supported in this browser');
       }
 
+      // Get the appropriate SpeechRecognition constructor
+      const SpeechRecognitionConstructor = (window as WindowWithSpeechRecognition).SpeechRecognition || 
+                                         (window as WindowWithSpeechRecognition).webkitSpeechRecognition;
+      
+      if (!SpeechRecognitionConstructor) {
+        throw new Error('Speech recognition not available');
+      }
+
+      // Create new recognition instance
+      const recognition = new SpeechRecognitionConstructor();
+      recognitionRef.current = recognition;
+
       // Configure recognition settings
-      recognitionRef.current.continuous = true;
-      recognitionRef.current.interimResults = true;
-      recognitionRef.current.lang = sourceLanguage === 'ar' ? 'ar-SA' : sourceLanguage === 'bn' ? 'bn-BD' : 'en-US';
+      recognition.continuous = true;
+      recognition.interimResults = true;
+      recognition.maxAlternatives = 3;
       
-      console.log('Speech recognition start() called');
+      // Set language based on source language
+      const languageCode = getLanguageCode(sourceLanguage);
+      recognition.lang = languageCode;
       
+      console.log(`Web Speech API started for ${languageCode}`);
+
       // Set up event handlers
-      recognitionRef.current.onstart = function () {
-        console.log('Web Speech API started for', recognitionRef.current?.lang);
-        setIsProcessing(false);
+      recognition.onstart = () => {
+        console.log('Speech recognition start() called');
+        setIsProcessing(true);
         isRecognitionRunningRef.current = true;
       };
 
-      recognitionRef.current.onend = function () {
-        console.log('Speech recognition ended');
-        // Only try to restart if user didn't manually stop and we haven't exceeded retries
-        if (isRecording && !isRecognitionRunningRef.current && retryCount < maxRetries) {
-          console.log(`Recognition ended unexpectedly, attempting to restart... (attempt ${retryCount + 1}/${maxRetries})`);
-          setRetryCount(prev => prev + 1);
-          
-          // Try to restart after a delay
-          setTimeout(() => {
-            if (isRecording && !isRecognitionRunningRef.current && retryCount < maxRetries) {
-              console.log('Attempting to restart recognition...');
-              startRecognition();
-            }
-          }, retryDelay);
-        } else if (retryCount >= maxRetries) {
-          console.log('Max retries reached, stopping recognition');
-          setTranscription('Maximum retry attempts reached. Please try starting recording again.');
-          setIsRecording(false);
-          setRetryCount(0);
-        }
-        isRecognitionRunningRef.current = false;
-      };
-
-      recognitionRef.current.onresult = function (event: SpeechRecognitionEvent) {
-        console.log('Speech recognition result received:', event);
-        
+      recognition.onresult = (event: SpeechRecognitionEvent) => {
         let finalTranscript = '';
         let interimTranscript = '';
 
@@ -177,108 +166,108 @@ export function MicrophoneRecorder({
           }
         }
 
+        // Update accumulated transcript
         if (finalTranscript) {
-          console.log('Final transcript:', finalTranscript);
-          accumulatedTranscriptRef.current += (accumulatedTranscriptRef.current ? ' ' : '') + finalTranscript;
-          setTranscription(accumulatedTranscriptRef.current);
-          console.log('Accumulated transcript:', accumulatedTranscriptRef.current);
-          onTranscription(accumulatedTranscriptRef.current, true);
+          accumulatedTranscriptRef.current += finalTranscript + ' ';
+          onTranscription(accumulatedTranscriptRef.current.trim(), true);
         }
 
+        // Update interim transcript for live display
         if (interimTranscript) {
-          console.log('Interim transcript:', interimTranscript);
           onTranscription(interimTranscript, false);
         }
       };
 
-      recognitionRef.current.onerror = function (event: SpeechRecognitionErrorEvent) {
+      recognition.onerror = (event: SpeechRecognitionErrorEvent) => {
         console.log('Speech recognition error:', event.error);
         console.log('Error details:', event);
         
-        if (event.error === 'network') {
-          console.log('Network error - speech recognition may be limited');
-          setLastError('Network error - speech recognition may be limited');
-          // Don't stop recording on network errors, but limit retries
-          if (retryCount >= maxRetries) {
-            console.log('Max retries reached for network errors, stopping');
-            setTranscription('Network error: Maximum retry attempts reached. Please try again later.');
-            setIsRecording(false);
-            isRecognitionRunningRef.current = false;
-            setRetryCount(0);
+        if (isProduction) {
+          let userMessage = '';
+          switch (event.error) {
+            case 'network':
+              userMessage = 'Network error - speech recognition may be limited';
+              break;
+            case 'not-allowed':
+              userMessage = 'Microphone access denied. Please allow microphone permissions.';
+              break;
+            case 'no-speech':
+              userMessage = 'No speech detected. Please try speaking again.';
+              break;
+            case 'aborted':
+              userMessage = 'Speech recognition was aborted';
+              break;
+            default:
+              userMessage = `Speech recognition error: ${event.error}`;
           }
-        } else if (event.error === 'not-allowed') {
-          console.log('Microphone access denied');
-          setLastError('Microphone access denied');
-          setTranscription('Microphone access denied. Please allow microphone permissions and try again.');
-          setIsRecording(false);
-          isRecognitionRunningRef.current = false;
-          setRetryCount(0);
-        } else if (event.error === 'no-speech') {
-          console.log('No speech detected');
-          setLastError('No speech detected');
-          // Don't show error for no-speech, just log it
-        } else if (event.error === 'aborted') {
-          console.log('Speech recognition aborted');
-          setLastError('Speech recognition aborted');
-          // Don't show error for aborted, just log it
+          onTranslation(userMessage);
         } else {
-          console.log('Unknown speech recognition error:', event.error);
-          setLastError(`Unknown error: ${event.error}`);
-          // Only stop on critical errors
-          if (event.error !== 'network') {
-            setTranscription(`Speech recognition error: ${event.error}. Please try again.`);
-            setIsRecording(false);
-            isRecognitionRunningRef.current = false;
-            setRetryCount(0);
-          }
+          onTranslation(`Error: ${event.error}`);
+        }
+        
+        setIsProcessing(false);
+        isRecognitionRunningRef.current = false;
+      };
+
+      recognition.onend = () => {
+        console.log('Speech recognition ended');
+        setIsProcessing(false);
+        isRecognitionRunningRef.current = false;
+        
+        // Smart retry logic for production
+        if (isProduction && isRecording && retryCount < maxRetries) {
+          console.log('Recognition ended unexpectedly, attempting to restart...');
+          setTimeout(() => {
+            if (isRecording && retryCount < maxRetries) {
+              console.log('Attempting to restart recognition...');
+              setRetryCount(prev => prev + 1);
+              startRecognition();
+            }
+          }, retryDelay);
+        } else if (retryCount >= maxRetries) {
+          console.log('Max retries reached, stopping recognition');
+          setIsRecording(false);
+          onTranslation('Maximum retry attempts reached. Please try again manually.');
         }
       };
 
-      recognitionRef.current.start();
+      // Start recognition
+      recognition.start();
+      
     } catch (error) {
-      console.error('Error creating or starting speech recognition:', error);
-      setTranscription(`Error starting speech recognition: ${error}`);
-      setIsRecording(false);
+      console.error('Error starting speech recognition:', error);
+      onTranslation(`Error starting speech recognition: ${error instanceof Error ? error.message : 'Unknown error'}`);
       setIsProcessing(false);
     }
-  }, [setIsRecording, sourceLanguage, onTranscription, isRecording]);
+  }, [isRecording, sourceLanguage, getLanguageCode, onTranscription, onTranslation, isProduction, retryCount, maxRetries, retryDelay]);
 
   const stopRecognition = useCallback(() => {
     console.log('Stopping speech recognition...');
+    
+    if (recognitionRef.current) {
+      recognitionRef.current.stop();
+      recognitionRef.current = null;
+    }
+    
     setIsRecording(false);
     setIsProcessing(false);
-    
-    if (recognitionRef.current && isRecognitionRunningRef.current) {
-      try {
-        recognitionRef.current.stop();
-        console.log('Speech recognition stopped successfully');
-      } catch (error) {
-        console.log('Error stopping speech recognition:', error);
-      }
-    }
-    
     isRecognitionRunningRef.current = false;
-    recognitionRef.current = null;
+    setRetryCount(0);
   }, []);
 
-  // Function to manually reset and try again
   const resetAndRetry = useCallback(() => {
-    console.log('Manual reset and retry requested');
+    console.log('Resetting and retrying recognition...');
     setRetryCount(0);
-    setLastError('');
-    setTranscription('');
-    accumulatedTranscriptRef.current = '';
+    setLastError(null);
+    stopRecognition();
     
-    if (isRecording) {
-      // Stop current recording and restart
-      stopRecognition();
-      setTimeout(() => {
-        if (isRecording) {
-          startRecognition();
-        }
-      }, 500);
-    }
-  }, [isRecording, stopRecognition, startRecognition]);
+    // Wait a moment then restart
+    setTimeout(() => {
+      if (isRecording) {
+        startRecognition();
+      }
+    }, 1000);
+  }, [isRecording, startRecognition, stopRecognition]);
 
   // Simple client-side translation function
   const translateText = useCallback(async (text: string, sourceLang: string, targetLang: string) => {
@@ -317,185 +306,145 @@ export function MicrophoneRecorder({
     }
   }, []);
 
-  // Remove the problematic useEffect that causes auto-restart
-  // useEffect(() => {
-  //   if (isRecording && !isRecognitionRunningRef.current) {
-  //     startRecognition();
-  //   } else if (!isRecording && isRecognitionRunningRef.current) {
-  //     stopRecognition();
-  //   }
-  // }, [isRecording]);
-
+  // Handle transcription updates in a separate effect to avoid render conflicts
   useEffect(() => {
-    if (transcription) {
-      translateText(transcription, sourceLanguage, targetLanguage).then(result => {
+    if (accumulatedTranscriptRef.current) {
+      translateText(accumulatedTranscriptRef.current, sourceLanguage, targetLanguage).then(result => {
         onTranslation(result);
       }).catch(error => {
         console.error('Translation failed:', error);
         onTranslation(`Translation error: ${error instanceof Error ? error.message : 'Unknown error'}`);
       });
     }
-  }, [transcription, translateText, sourceLanguage, targetLanguage, onTranslation]);
+  }, [accumulatedTranscriptRef.current, translateText, sourceLanguage, targetLanguage, onTranslation]);
 
-  // Handle transcription updates in a separate effect to avoid render conflicts
+  // Handle recording state changes
   useEffect(() => {
-    if (pendingTranscriptionRef.current || pendingInterimRef.current) {
-      const timer = setTimeout(() => {
-        if (pendingTranscriptionRef.current) {
-          onTranscription(pendingTranscriptionRef.current, true);
-          pendingTranscriptionRef.current = '';
-        }
-        if (pendingInterimRef.current) {
-          onTranscription(pendingInterimRef.current, false);
-          pendingInterimRef.current = '';
-        }
-      }, 0);
-      
-      return () => clearTimeout(timer);
+    if (isRecording && !isRecognitionRunningRef.current) {
+      startRecognition();
+    } else if (!isRecording && isRecognitionRunningRef.current) {
+      stopRecognition();
     }
-  });
+  }, [isRecording, startRecognition, stopRecognition]);
 
   return (
-    <div className="w-full max-w-2xl">
+    <div className="flex flex-col items-center space-y-6">
       {/* Main Recording Button */}
-      <div className="flex flex-col items-center space-y-6">
-        {/* Recording Button */}
-        <div className="relative">
-          <button
-            onClick={() => {
-              if (isRecording) {
-                stopRecognition();
-              } else {
-                startRecognition();
-              }
-            }}
-            disabled={isProcessing}
-            className={`relative w-24 h-24 rounded-full transition-all duration-300 transform hover:scale-105 active:scale-95 disabled:opacity-50 disabled:cursor-not-allowed ${
-              isRecording
-                ? 'bg-gradient-to-r from-red-500 to-red-600 shadow-2xl shadow-red-500/30'
-                : 'bg-gradient-to-r from-blue-500 to-purple-600 shadow-2xl shadow-blue-500/30'
-            }`}
-          >
-            {/* Recording Animation Rings */}
-            {isRecording && (
-              <>
-                <div className="absolute inset-0 rounded-full border-4 border-red-300/50 animate-ping"></div>
-                <div className="absolute inset-0 rounded-full border-4 border-red-200/30 animate-pulse"></div>
-              </>
-            )}
-            
-            {/* Icon */}
-            <div className="absolute inset-0 flex items-center justify-center">
-              {isProcessing ? (
-                <div className="w-8 h-8 border-4 border-white/30 border-t-white rounded-full animate-spin"></div>
-              ) : isRecording ? (
-                <svg className="w-8 h-8 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 10a1 1 0 011-1h4a1 1 0 011 1v4a1 1 0 01-1 1h-4a1 1 0 01-1-1v-4z" />
-                </svg>
-              ) : (
-                <svg className="w-8 h-8 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 11a7 7 0 01-7 7m0 0a7 7 0 01-7-7m7 7v4m0 0H8m4 0h4m-4-8a3 3 0 01-3-3V5a3 3 0 116 0v6a3 3 0 01-3 3z" />
-                </svg>
-              )}
-            </div>
-          </button>
+      <div className="relative">
+        <button
+          onClick={isRecording ? stopRecognition : startRecognition}
+          disabled={isProcessing}
+          className={`
+            relative w-24 h-24 rounded-full transition-all duration-300 transform hover:scale-105 active:scale-95
+            ${isRecording 
+              ? 'bg-red-500 hover:bg-red-600 shadow-lg shadow-red-500/50' 
+              : 'bg-blue-500 hover:bg-blue-600 shadow-lg shadow-blue-500/50'
+            }
+            ${isProcessing ? 'animate-pulse' : ''}
+            disabled:opacity-50 disabled:cursor-not-allowed
+          `}
+        >
+          {/* Recording Animation Rings */}
+          {isRecording && (
+            <>
+              <div className="absolute inset-0 rounded-full bg-red-400 animate-ping opacity-75"></div>
+              <div className="absolute inset-0 rounded-full bg-red-300 animate-pulse"></div>
+            </>
+          )}
           
-          {/* Status Text */}
-          <div className="absolute -bottom-8 left-1/2 transform -translate-x-1/2 whitespace-nowrap">
-            <p className="text-sm font-medium text-gray-700 dark:text-gray-300">
-              {isProcessing ? 'Initializing...' : isRecording ? 'Recording' : 'Click to Start'}
+          {/* Icon */}
+          <div className="relative z-10 flex items-center justify-center w-full h-full">
+            {isProcessing ? (
+              <svg className="w-8 h-8 text-white animate-spin" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+              </svg>
+            ) : isRecording ? (
+              <svg className="w-8 h-8 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 10a1 1 0 011-1h4a1 1 0 011 1v4a1 1 0 01-1 1h-4a1 1 0 01-1-1v-4z" />
+              </svg>
+            ) : (
+              <svg className="w-8 h-8 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 11a7 7 0 01-7 7m0 0a7 7 0 01-7-7m7 7v4m0 0H8m4 0h4m-4-8a3 3 0 01-3-3V5a3 3 0 116 0v6a3 3 0 01-3 3z" />
+              </svg>
+            )}
+          </div>
+        </button>
+        
+        {/* Status Text */}
+        <div className="mt-4 text-center">
+          <p className="text-sm font-medium text-gray-700 dark:text-gray-300">
+            {isProcessing ? 'Processing...' : isRecording ? 'Recording' : 'Click to Record'}
+          </p>
+          {isRecording && (
+            <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">
+              Speaking in {sourceLanguage === 'ar' ? 'العربية (Arabic)' : sourceLanguage === 'bn' ? 'বাংলা (Bengali)' : 'English (US)'}
             </p>
+          )}
+        </div>
+      </div>
+
+      {/* Production Environment Warning */}
+      {isProduction && (
+        <div className="w-full max-w-md bg-yellow-50 dark:bg-yellow-900/20 border border-yellow-200 dark:border-yellow-800 rounded-lg p-4">
+          <div className="flex items-start space-x-3">
+            <div className="flex-shrink-0">
+              <svg className="w-5 h-5 text-yellow-600 dark:text-yellow-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-2.5L13.732 4c-.77-.833-1.964-.833-2.732 0L3.732 16.5c-.77.833.192 2.5 1.732 2.5z" />
+              </svg>
+            </div>
+            <div className="flex-1">
+              <p className="text-sm font-medium text-yellow-800 dark:text-yellow-200">
+                Notes:
+              </p>
+              <ul className="mt-2 text-xs text-yellow-700 dark:text-yellow-300 space-y-1">
+                <li className="flex items-center space-x-2">
+                  <div className="w-1.5 h-1.5 bg-yellow-500 rounded-full"></div>
+                  <span>Allow microphone permissions</span>
+                </li>
+                <li className="flex items-center space-x-2">
+                  <div className="w-1.5 h-1.5 bg-yellow-500 rounded-full"></div>
+                  <span>Use HTTPS (already enabled)</span>
+                </li>
+              </ul>
+            </div>
           </div>
         </div>
+      )}
 
-        {/* Status Cards */}
-        <div className="w-full space-y-4">
-          {/* Production Environment Warning */}
-          {isProduction && (
-            <div className="bg-yellow-50 dark:bg-yellow-900/20 border border-yellow-200 dark:border-yellow-800 rounded-xl p-4">
-              <div className="flex items-start space-x-3">
-                <div className="w-5 h-5 bg-yellow-500 rounded-full flex items-center justify-center flex-shrink-0 mt-0.5">
-                  <svg className="w-3 h-3 text-white" fill="currentColor" viewBox="0 0 20 20">
-                    <path fillRule="evenodd" d="M8.257 3.099c.765-1.36 2.722-1.36 3.486 0l5.58 9.92c.75 1.334-.213 2.98-1.742 2.98H4.42c-1.53 0-2.493-1.646-1.743-2.98l5.58-9.92zM11 13a1 1 0 11-2 0 1 1 0 012 0zm-1-8a1 1 0 00-1 1v3a1 1 0 002 0V6a1 1 0 00-1-1z" clipRule="evenodd" />
-                  </svg>
-                </div>
-                <div className="flex-1">
-                  <p className="text-sm font-medium text-yellow-800 dark:text-yellow-200">
-                    🌐 Production Environment Detected
-                  </p>
-                  <p className="text-xs text-yellow-700 dark:text-yellow-300 mt-1">
-                    If speech recognition doesn&apos;t work, try:
-                  </p>
-                  <ul className="text-xs text-yellow-700 dark:text-yellow-300 mt-2 space-y-1">
-                    <li className="flex items-center space-x-2">
-                      <div className="w-1.5 h-1.5 bg-yellow-500 rounded-full"></div>
-                      <span>Allow microphone permissions</span>
-                    </li>
-                    <li className="flex items-center space-x-2">
-                      <div className="w-1.5 h-1.5 bg-yellow-500 rounded-full"></div>
-                      <span>Use HTTPS (already enabled)</span>
-                    </li>
-                    <li className="flex items-center space-x-2">
-                      <div className="w-1.5 h-1.5 bg-yellow-500 rounded-full"></div>
-                      <span>Try a different browser (Chrome recommended)</span>
-                    </li>
-                    <li className="flex items-center space-x-2">
-                      <div className="w-1.5 h-1.5 bg-yellow-500 rounded-full"></div>
-                      <span>Refresh the page if needed</span>
-                    </li>
-                  </ul>
-                </div>
-              </div>
+      {/* Recognition Status */}
+      <div className="w-full max-w-md bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 rounded-lg p-4">
+        <div className="flex items-start space-x-3">
+          <div className="flex-shrink-0">
+            <svg className="w-5 h-5 text-blue-600 dark:text-blue-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+            </svg>
+          </div>
+          <div className="flex-1">
+            <p className="text-sm font-medium text-blue-800 dark:text-blue-200">
+              Recognition Status
+            </p>
+            <div className="mt-2 text-xs text-blue-700 dark:text-blue-300 space-y-1">
+              <p>Current Language: <span className="font-medium">
+                {sourceLanguage === 'ar' ? 'العربية (Arabic)' : sourceLanguage === 'bn' ? 'বাংলা (Bengali)' : 'English (US)'}
+              </span></p>
+              <p>Language Code: <span className="font-medium">{getLanguageCode(sourceLanguage)}</span></p>
+              <p>Retry Count: <span className="font-medium">{retryCount}/{maxRetries}</span></p>
+              {lastError && (
+                <p className="text-red-600 dark:text-red-400">Last Error: {lastError}</p>
+              )}
             </div>
-          )}
-
-          {/* Recognition Status */}
-          {(retryCount > 0 || lastError) && (
-            <div className="bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 rounded-xl p-4">
-              <div className="flex items-start space-x-3">
-                <div className="w-5 h-5 bg-blue-500 rounded-full flex items-center justify-center flex-shrink-0 mt-0.5">
-                  <svg className="w-3 h-3 text-white" fill="currentColor" viewBox="0 0 20 20">
-                    <path fillRule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7-4a1 1 0 11-2 0 1 1 0 012 0zM9 9a1 1 0 000 2v3a1 1 0 001 1h1a1 1 0 100-2v-3a1 1 0 00-1-1H9z" clipRule="evenodd" />
-                  </svg>
-                </div>
-                <div className="flex-1">
-                  <p className="text-sm font-medium text-blue-800 dark:text-blue-200">
-                    🔄 Recognition Status
-                  </p>
-                  {retryCount > 0 && (
-                    <div className="mt-2">
-                      <div className="flex items-center justify-between mb-2">
-                        <span className="text-xs text-blue-700 dark:text-blue-300">Retry attempts:</span>
-                        <span className="text-xs font-medium text-blue-800 dark:text-blue-200">{retryCount}/{maxRetries}</span>
-                      </div>
-                      <div className="w-full bg-blue-200 dark:bg-blue-700 rounded-full h-2">
-                        <div 
-                          className="bg-blue-500 h-2 rounded-full transition-all duration-300"
-                          style={{ width: `${(retryCount / maxRetries) * 100}%` }}
-                        ></div>
-                      </div>
-                    </div>
-                  )}
-                  {lastError && (
-                    <p className="text-xs text-blue-700 dark:text-blue-300 mt-2">
-                      <span className="font-medium">Last error:</span> {lastError}
-                    </p>
-                  )}
-                  {retryCount >= maxRetries && (
-                    <div className="mt-3">
-                      <button
-                        onClick={resetAndRetry}
-                        className="w-full bg-blue-500 hover:bg-blue-600 text-white text-xs font-medium px-4 py-2 rounded-lg transition-colors duration-200"
-                      >
-                        🔄 Reset & Try Again
-                      </button>
-                    </div>
-                  )}
-                </div>
-              </div>
-            </div>
-          )}
+            
+            {/* Reset Button */}
+            {retryCount >= maxRetries && (
+              <button
+                onClick={resetAndRetry}
+                className="mt-3 text-xs bg-blue-500 hover:bg-blue-600 text-white px-3 py-1 rounded-md transition-colors"
+              >
+                Reset & Try Again
+              </button>
+            )}
+          </div>
         </div>
       </div>
     </div>
