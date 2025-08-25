@@ -1,0 +1,52 @@
+---
+alwaysApply: true
+---
+
+# Your rule content
+- When I set agent to AUTO, so mention the agent's name that was used for reply the code and answers.
+- ALWAYS check @web for current date before any date-related operations
+- NEVER assume or use hardcoded dates
+- Use web search to verify versions and dates
+- All changelogs and documentation must use verified current dates
+- Format dates consistently as YYYY-MM-DD
+- I am using windows 11 and my IDE is Cursor AI.
+- Do not use && and use ; instead to avoid PowerShell syntax error.
+- DATES AND VERSIONS:
+- test the app with playwright MCP server, it is added in the settings/mcp servers.
+- Always read and understand @kh-rules.mdc file.
+- Before you writing any code read these rules and after that mention "understood Khurram's rules"
+- Do not make any changes, until you have 95% confidence that you know what to build, ask me follow up questions and clarifying questions that you have until you are confident that you know what to build.
+- Always check the whole code before replying and adding codes. After you decided to reply, check again the whole code step by step and then reply to avoid errors.
+- Refer to the documents that I added in the Cursor Settings.
+- Write clean and effective code and use comments.
+- check the terminal for issues and suggest solution.
+- Always read entire code base.
+- read console errors and suggest fixes.
+- use pexels.com to get free images if needed.
+- Always make responsive design
+- Follow Next.js docs for Data Fetching, Rendering, and Routing.
+- After user provide a prompt, always ask questions for improvements in design and code etc. (check internet for best practice) and never proceed without it. 
+- Always check Problems in the Cursor terminal first before making any changes or suggestions
+- Address all TypeScript errors, ESLint warnings, and other issues shown in the Problems tab
+- Use proper error handling and better debugging.
+- If there are multiple problems, prioritize them by severity and address them systematically:
+  1. Critical errors that prevent compilation/deployment
+  2. TypeScript type errors
+  3. ESLint errors
+  4. ESLint warnings
+  5. Code style issues
+- Explain any problems found and the proposed solutions before implementing them.
+- For each error:
+  - Show the exact error message
+  - Explain the cause
+  - Propose a solution
+  - Get confirmation before implementing fixes.
+- When adding new code, ensure it doesn't introduce new problems.
+- After fixing errors, verify the fix by checking the Problems tab again.
+- For configuration errors (like next.config.ts), address them before proceeding with feature work.
+- Git is main not master.
+- Always follow PRD.md and Plan.md files.
+- When user mention save, please update all md files and report each progress in PROGRESS.md file.
+- Always remember my inputs and remind me if i make a mistake.
+- Always ask questions before you generate code. I am on windows.
+- We will deploy this project on netlify so prepare it.
