@@ -133,93 +133,106 @@ export function MicrophoneRecorder({
         isRecognitionRunningRef.current = true;
       };
 
-        recognitionRef.current.onresult = function (event: SpeechRecognitionEvent) {
-          console.log('Speech recognition result received:', event);
-          let interimTranscript = '';
-          let finalTranscript = '';
-
-          for (let i = event.resultIndex; i < event.results.length; ++i) {
-            const transcript = event.results[i][0].transcript;
-            if (event.results[i].isFinal) {
-              finalTranscript += transcript;
-            } else {
-              interimTranscript += transcript;
+      recognitionRef.current.onend = function () {
+        console.log('Speech recognition ended');
+        // Only stop if user didn't manually stop
+        if (isRecording) {
+          console.log('Recognition ended unexpectedly, attempting to restart...');
+          // Try to restart after a short delay
+          setTimeout(() => {
+            if (isRecording && !isRecognitionRunningRef.current) {
+              console.log('Attempting to restart recognition...');
+              startRecognition();
             }
-          }
+          }, 1000);
+        }
+        isRecognitionRunningRef.current = false;
+      };
 
-          if (finalTranscript) {
-            console.log('Final transcript:', finalTranscript);
-            // Update accumulated transcript using ref
-            accumulatedTranscriptRef.current += (accumulatedTranscriptRef.current ? ' ' : '') + finalTranscript;
-            console.log('Accumulated transcript:', accumulatedTranscriptRef.current);
-            
-            // Update local state
-            setTranscription(accumulatedTranscriptRef.current);
-            
-            // Store pending transcription for useEffect to handle
-            pendingTranscriptionRef.current = accumulatedTranscriptRef.current;
-            // Clear interim when final arrives
-            pendingInterimRef.current = '';
-          }
-          
-          if (interimTranscript) {
-            console.log('Interim transcript:', interimTranscript);
-            // Show live transcription as user speaks - combine accumulated + current interim
-            const liveTranscript = accumulatedTranscriptRef.current + (accumulatedTranscriptRef.current ? ' ' : '') + interimTranscript;
-            // Store pending interim for useEffect to handle
-            pendingInterimRef.current = liveTranscript;
-          }
-        };
+      recognitionRef.current.onresult = function (event: SpeechRecognitionEvent) {
+        console.log('Speech recognition result received:', event);
+        
+        let finalTranscript = '';
+        let interimTranscript = '';
 
-        recognitionRef.current.onerror = function (event: SpeechRecognitionErrorEvent) {
-          console.log('Speech recognition error:', event.error);
-          console.log('Error details:', event);
-          
-          if (event.error === 'network') {
-            console.log('Network error - speech recognition may be limited');
-            // Show user-friendly message for network errors
-            setTranscription('Network error: Please check your internet connection and try again. If the issue persists, try refreshing the page.');
-          } else if (event.error === 'not-allowed') {
-            console.log('Microphone access denied');
-            setTranscription('Microphone access denied. Please allow microphone permissions and try again.');
-          } else if (event.error === 'no-speech') {
-            console.log('No speech detected');
-            // Don't show error for no-speech, just log it
-          } else if (event.error === 'aborted') {
-            console.log('Speech recognition aborted');
-            // Don't show error for aborted, just log it
+        for (let i = event.resultIndex; i < event.results.length; i++) {
+          const transcript = event.results[i][0].transcript;
+          if (event.results[i].isFinal) {
+            finalTranscript += transcript;
           } else {
-            console.log('Unknown speech recognition error:', event.error);
-            setTranscription(`Speech recognition error: ${event.error}. Please try again.`);
+            interimTranscript += transcript;
           }
-          
+        }
+
+        if (finalTranscript) {
+          console.log('Final transcript:', finalTranscript);
+          accumulatedTranscriptRef.current += (accumulatedTranscriptRef.current ? ' ' : '') + finalTranscript;
+          setTranscription(accumulatedTranscriptRef.current);
+          console.log('Accumulated transcript:', accumulatedTranscriptRef.current);
+          onTranscription(accumulatedTranscriptRef.current, true);
+        }
+
+        if (interimTranscript) {
+          console.log('Interim transcript:', interimTranscript);
+          onTranscription(interimTranscript, false);
+        }
+      };
+
+      recognitionRef.current.onerror = function (event: SpeechRecognitionErrorEvent) {
+        console.log('Speech recognition error:', event.error);
+        console.log('Error details:', event);
+        
+        if (event.error === 'network') {
+          console.log('Network error - speech recognition may be limited');
+          // Don't stop recording on network errors, just log them
+          // The recognition will continue trying
+        } else if (event.error === 'not-allowed') {
+          console.log('Microphone access denied');
+          setTranscription('Microphone access denied. Please allow microphone permissions and try again.');
           setIsRecording(false);
           isRecognitionRunningRef.current = false;
-        };
+        } else if (event.error === 'no-speech') {
+          console.log('No speech detected');
+          // Don't show error for no-speech, just log it
+        } else if (event.error === 'aborted') {
+          console.log('Speech recognition aborted');
+          // Don't show error for aborted, just log it
+        } else {
+          console.log('Unknown speech recognition error:', event.error);
+          // Only stop on critical errors
+          if (event.error !== 'network') {
+            setTranscription(`Speech recognition error: ${event.error}. Please try again.`);
+            setIsRecording(false);
+            isRecognitionRunningRef.current = false;
+          }
+        }
+      };
 
-        recognitionRef.current.onend = function () {
-          console.log(`Speech recognition ended`);
-          isRecognitionRunningRef.current = false;
-          setIsProcessing(false);
-          // Don't clear transcription here - preserve what was said
-        };
-
-        recognitionRef.current.start();
-      } catch (error) {
-        console.error('Error creating or starting speech recognition:', error);
-        alert('Error starting speech recognition: ' + error);
-        setIsRecording(false);
-        setIsProcessing(false);
-      }
+      recognitionRef.current.start();
+    } catch (error) {
+      console.error('Error creating or starting speech recognition:', error);
+      setTranscription(`Error starting speech recognition: ${error}`);
+      setIsRecording(false);
+      setIsProcessing(false);
+    }
   }, [setIsRecording, sourceLanguage, onTranscription, isRecording]);
 
-  const stopRecognition = useCallback((): void => {
-    if (recognitionRef.current && recognitionRef.current.continuous) {
-      recognitionRef.current.stop();
-      console.log(`Speech recognition stopped`);
-    }
-    isRecognitionRunningRef.current = false;
+  const stopRecognition = useCallback(() => {
+    console.log('Stopping speech recognition...');
+    setIsRecording(false);
     setIsProcessing(false);
+    
+    if (recognitionRef.current && isRecognitionRunningRef.current) {
+      try {
+        recognitionRef.current.stop();
+        console.log('Speech recognition stopped successfully');
+      } catch (error) {
+        console.log('Error stopping speech recognition:', error);
+      }
+    }
+    
+    isRecognitionRunningRef.current = false;
+    recognitionRef.current = null;
   }, []);
 
   const translateText = useCallback(async (text: string) => {
@@ -248,21 +261,23 @@ export function MicrophoneRecorder({
     }
   }, [targetLanguage, onTranslation]);
 
+  // Handle recording state changes
   useEffect(() => {
-    if (isRecording) {
+    if (isRecording && !isRecognitionRunningRef.current) {
       startRecognition();
-    } else {
+    } else if (!isRecording && isRecognitionRunningRef.current) {
       stopRecognition();
     }
+  }, [isRecording]);
 
-    // Cleanup function to prevent memory leaks
-    return () => {
-      if (recognitionRef.current) {
-        recognitionRef.current.stop();
-        recognitionRef.current = null;
-      }
-    };
-  }, [isRecording, startRecognition, stopRecognition]);
+  // Remove the automatic start/stop useEffect that was causing conflicts
+  // useEffect(() => {
+  //   if (isRecording) {
+  //     startRecognition();
+  //   } else {
+  //     stopRecognition();
+  //   }
+  // }, [isRecording, startRecognition, stopRecognition]);
 
   useEffect(() => {
     if (transcription) {
@@ -293,7 +308,13 @@ export function MicrophoneRecorder({
       <div className="space-y-4">
         <div className="flex justify-center">
           <button
-            onClick={isRecording ? stopRecognition : startRecognition}
+            onClick={() => {
+              if (isRecording) {
+                stopRecognition();
+              } else {
+                startRecognition();
+              }
+            }}
             disabled={isProcessing}
             className={`px-6 py-3 rounded-full font-semibold transition-all duration-200 ${
               isRecording
