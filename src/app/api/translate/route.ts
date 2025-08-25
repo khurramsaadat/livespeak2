@@ -1,54 +1,18 @@
 import { NextResponse } from 'next/server';
 
 // Simple translation fallback - no external APIs needed
-const simpleTranslations: { [key: string]: { [key: string]: string } } = {
-  'en': {
-    'en': 'Same language - no translation needed',
-    'es': 'Mismo idioma - no se necesita traducción',
-    'fr': 'Même langue - pas de traduction nécessaire',
-    'de': 'Gleiche Sprache - keine Übersetzung erforderlich',
-    'ar': 'نفس اللغة - لا حاجة للترجمة',
-    'bn': 'একই ভাষা - অনুবাদের প্রয়োজন নেই'
+const simpleTranslations: Record<string, Record<string, string>> = {
+  en: {
+    ar: "مرحبا، هذا تطبيق بسيط للترجمة",
+    bn: "হ্যালো, এটি একটি সাধারণ অনুবাদ অ্যাপ্লিকেশন"
   },
-  'es': {
-    'en': 'Hello, how are you?',
-    'es': 'Same language - no translation needed',
-    'fr': 'Bonjour, comment allez-vous?',
-    'de': 'Hallo, wie geht es dir?',
-    'ar': 'مرحبا، كيف حالك؟',
-    'bn': 'হ্যালো, আপনি কেমন আছেন?'
+  ar: {
+    en: "Hello, this is a simple translation app",
+    bn: "হ্যালো, এটি একটি সাধারণ অনুবাদ অ্যাপ্লিকেশন"
   },
-  'fr': {
-    'en': 'Hello, how are you?',
-    'es': 'Hola, ¿cómo estás?',
-    'fr': 'Same language - no translation needed',
-    'de': 'Hallo, wie geht es dir?',
-    'ar': 'مرحبا، كيف حالك؟',
-    'bn': 'হ্যালো, আপনি কেমন আছেন?'
-  },
-  'de': {
-    'en': 'Hello, how are you?',
-    'es': 'Hola, ¿cómo estás?',
-    'fr': 'Bonjour, comment allez-vous?',
-    'de': 'Same language - no translation needed',
-    'ar': 'مرحبا، كيف حالك؟',
-    'bn': 'হ্যালো, আপনি কেমন আছেন?'
-  },
-  'ar': {
-    'en': 'Hello, how are you?',
-    'es': 'Hola, ¿cómo estás?',
-    'fr': 'Bonjour, comment allez-vous?',
-    'de': 'Hallo, wie geht es dir?',
-    'ar': 'نفس اللغة - لا حاجة للترجمة',
-    'bn': 'হ্যালো, আপনি কেমন আছেন?'
-  },
-  'bn': {
-    'en': 'Hello, how are you?',
-    'es': 'Hola, ¿cómo estás?',
-    'fr': 'Bonjour, comment allez-vous?',
-    'de': 'Hallo, wie geht es dir?',
-    'ar': 'مرحبا، كيف حالك؟',
-    'bn': 'একই ভাষা - অনুবাদের প্রয়োজন নেই'
+  bn: {
+    en: "Hello, this is a simple translation app",
+    ar: "مرحبا، هذا تطبيق بسيط للترجمة"
   }
 };
 

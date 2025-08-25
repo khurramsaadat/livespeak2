@@ -128,7 +128,7 @@ export function MicrophoneRecorder({
       // Configure recognition settings
       recognitionRef.current.continuous = true;
       recognitionRef.current.interimResults = true;
-      recognitionRef.current.lang = sourceLanguage === 'ar' ? 'ar-SA' : 'en-US';
+      recognitionRef.current.lang = sourceLanguage === 'ar' ? 'ar-SA' : sourceLanguage === 'bn' ? 'bn-BD' : 'en-US';
       
       console.log('Speech recognition start() called');
       
@@ -306,23 +306,14 @@ export function MicrophoneRecorder({
     }
   }, [targetLanguage, onTranslation]);
 
-  // Handle recording state changes
-  useEffect(() => {
-    if (isRecording && !isRecognitionRunningRef.current) {
-      startRecognition();
-    } else if (!isRecording && isRecognitionRunningRef.current) {
-      stopRecognition();
-    }
-  }, [isRecording]);
-
-  // Remove the automatic start/stop useEffect that was causing conflicts
+  // Remove the problematic useEffect that causes auto-restart
   // useEffect(() => {
-  //   if (isRecording) {
+  //   if (isRecording && !isRecognitionRunningRef.current) {
   //     startRecognition();
-  //   } else {
+  //   } else if (!isRecording && isRecognitionRunningRef.current) {
   //     stopRecognition();
   //   }
-  // }, [isRecording, startRecognition, stopRecognition]);
+  // }, [isRecording]);
 
   useEffect(() => {
     if (transcription) {
@@ -349,9 +340,11 @@ export function MicrophoneRecorder({
   });
 
   return (
-    <div className="flex flex-col items-center gap-4">
-      <div className="space-y-4">
-        <div className="flex justify-center">
+    <div className="w-full max-w-2xl">
+      {/* Main Recording Button */}
+      <div className="flex flex-col items-center space-y-6">
+        {/* Recording Button */}
+        <div className="relative">
           <button
             onClick={() => {
               if (isRecording) {
@@ -361,77 +354,134 @@ export function MicrophoneRecorder({
               }
             }}
             disabled={isProcessing}
-            className={`px-6 py-3 rounded-full font-semibold transition-all duration-200 ${
+            className={`relative w-24 h-24 rounded-full transition-all duration-300 transform hover:scale-105 active:scale-95 disabled:opacity-50 disabled:cursor-not-allowed ${
               isRecording
-                ? 'bg-red-500 hover:bg-red-600 text-white'
-                : 'bg-blue-500 hover:bg-blue-600 text-white'
-            } disabled:opacity-50 disabled:cursor-not-allowed`}
+                ? 'bg-gradient-to-r from-red-500 to-red-600 shadow-2xl shadow-red-500/30'
+                : 'bg-gradient-to-r from-blue-500 to-purple-600 shadow-2xl shadow-blue-500/30'
+            }`}
           >
-            {isRecording ? 'Stop Recording' : 'Start Recording'}
+            {/* Recording Animation Rings */}
+            {isRecording && (
+              <>
+                <div className="absolute inset-0 rounded-full border-4 border-red-300/50 animate-ping"></div>
+                <div className="absolute inset-0 rounded-full border-4 border-red-200/30 animate-pulse"></div>
+              </>
+            )}
+            
+            {/* Icon */}
+            <div className="absolute inset-0 flex items-center justify-center">
+              {isProcessing ? (
+                <div className="w-8 h-8 border-4 border-white/30 border-t-white rounded-full animate-spin"></div>
+              ) : isRecording ? (
+                <svg className="w-8 h-8 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 10a1 1 0 011-1h4a1 1 0 011 1v4a1 1 0 01-1 1h-4a1 1 0 01-1-1v-4z" />
+                </svg>
+              ) : (
+                <svg className="w-8 h-8 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 11a7 7 0 01-7 7m0 0a7 7 0 01-7-7m7 7v4m0 0H8m4 0h4m-4-8a3 3 0 01-3-3V5a3 3 0 116 0v6a3 3 0 01-3 3z" />
+                </svg>
+              )}
+            </div>
           </button>
+          
+          {/* Status Text */}
+          <div className="absolute -bottom-8 left-1/2 transform -translate-x-1/2 whitespace-nowrap">
+            <p className="text-sm font-medium text-gray-700 dark:text-gray-300">
+              {isProcessing ? 'Initializing...' : isRecording ? 'Recording' : 'Click to Start'}
+            </p>
+          </div>
         </div>
 
-        <div className="text-center space-y-2">
-          <p className="text-sm text-gray-600 dark:text-gray-400">
-            &ldquo;Using: Device Built-in Web Speech API&rdquo;
-          </p>
-          <p className="text-sm text-gray-600 dark:text-gray-400">
-            No external APIs required - works immediately!
-          </p>
-          
+        {/* Status Cards */}
+        <div className="w-full space-y-4">
+          {/* Production Environment Warning */}
           {isProduction && (
-            <div className="mt-4 p-3 bg-yellow-50 dark:bg-yellow-900/20 border border-yellow-200 dark:border-yellow-800 rounded-lg">
-              <p className="text-sm text-yellow-800 dark:text-yellow-200 font-medium">
-                🌐 Production Environment Detected
-              </p>
-              <p className="text-xs text-yellow-700 dark:text-yellow-300 mt-1">
-                If speech recognition doesn&apos;t work, try:
-              </p>
-              <ul className="text-xs text-yellow-700 dark:text-yellow-300 mt-1 list-disc list-inside">
-                <li>Allow microphone permissions</li>
-                <li>Use HTTPS (already enabled)</li>
-                <li>Try a different browser (Chrome recommended)</li>
-                <li>Refresh the page if needed</li>
-              </ul>
+            <div className="bg-yellow-50 dark:bg-yellow-900/20 border border-yellow-200 dark:border-yellow-800 rounded-xl p-4">
+              <div className="flex items-start space-x-3">
+                <div className="w-5 h-5 bg-yellow-500 rounded-full flex items-center justify-center flex-shrink-0 mt-0.5">
+                  <svg className="w-3 h-3 text-white" fill="currentColor" viewBox="0 0 20 20">
+                    <path fillRule="evenodd" d="M8.257 3.099c.765-1.36 2.722-1.36 3.486 0l5.58 9.92c.75 1.334-.213 2.98-1.742 2.98H4.42c-1.53 0-2.493-1.646-1.743-2.98l5.58-9.92zM11 13a1 1 0 11-2 0 1 1 0 012 0zm-1-8a1 1 0 00-1 1v3a1 1 0 002 0V6a1 1 0 00-1-1z" clipRule="evenodd" />
+                  </svg>
+                </div>
+                <div className="flex-1">
+                  <p className="text-sm font-medium text-yellow-800 dark:text-yellow-200">
+                    🌐 Production Environment Detected
+                  </p>
+                  <p className="text-xs text-yellow-700 dark:text-yellow-300 mt-1">
+                    If speech recognition doesn&apos;t work, try:
+                  </p>
+                  <ul className="text-xs text-yellow-700 dark:text-yellow-300 mt-2 space-y-1">
+                    <li className="flex items-center space-x-2">
+                      <div className="w-1.5 h-1.5 bg-yellow-500 rounded-full"></div>
+                      <span>Allow microphone permissions</span>
+                    </li>
+                    <li className="flex items-center space-x-2">
+                      <div className="w-1.5 h-1.5 bg-yellow-500 rounded-full"></div>
+                      <span>Use HTTPS (already enabled)</span>
+                    </li>
+                    <li className="flex items-center space-x-2">
+                      <div className="w-1.5 h-1.5 bg-yellow-500 rounded-full"></div>
+                      <span>Try a different browser (Chrome recommended)</span>
+                    </li>
+                    <li className="flex items-center space-x-2">
+                      <div className="w-1.5 h-1.5 bg-yellow-500 rounded-full"></div>
+                      <span>Refresh the page if needed</span>
+                    </li>
+                  </ul>
+                </div>
+              </div>
             </div>
           )}
 
-          {/* Show retry status and errors */}
+          {/* Recognition Status */}
           {(retryCount > 0 || lastError) && (
-            <div className="mt-4 p-3 bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 rounded-lg">
-              <p className="text-sm text-blue-800 dark:text-blue-200 font-medium">
-                🔄 Recognition Status
-              </p>
-              {retryCount > 0 && (
-                <p className="text-xs text-blue-700 dark:text-blue-300 mt-1">
-                  Retry attempts: {retryCount}/{maxRetries}
-                </p>
-              )}
-              {lastError && (
-                <p className="text-xs text-blue-700 dark:text-blue-300 mt-1">
-                  Last error: {lastError}
-                </p>
-              )}
-              {retryCount >= maxRetries && (
-                <div className="mt-2">
-                  <button
-                    onClick={resetAndRetry}
-                    className="text-xs bg-blue-500 hover:bg-blue-600 text-white px-3 py-1 rounded"
-                  >
-                    Reset & Try Again
-                  </button>
+            <div className="bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 rounded-xl p-4">
+              <div className="flex items-start space-x-3">
+                <div className="w-5 h-5 bg-blue-500 rounded-full flex items-center justify-center flex-shrink-0 mt-0.5">
+                  <svg className="w-3 h-3 text-white" fill="currentColor" viewBox="0 0 20 20">
+                    <path fillRule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7-4a1 1 0 11-2 0 1 1 0 012 0zM9 9a1 1 0 000 2v3a1 1 0 001 1h1a1 1 0 100-2v-3a1 1 0 00-1-1H9z" clipRule="evenodd" />
+                  </svg>
                 </div>
-              )}
+                <div className="flex-1">
+                  <p className="text-sm font-medium text-blue-800 dark:text-blue-200">
+                    🔄 Recognition Status
+                  </p>
+                  {retryCount > 0 && (
+                    <div className="mt-2">
+                      <div className="flex items-center justify-between mb-2">
+                        <span className="text-xs text-blue-700 dark:text-blue-300">Retry attempts:</span>
+                        <span className="text-xs font-medium text-blue-800 dark:text-blue-200">{retryCount}/{maxRetries}</span>
+                      </div>
+                      <div className="w-full bg-blue-200 dark:bg-blue-700 rounded-full h-2">
+                        <div 
+                          className="bg-blue-500 h-2 rounded-full transition-all duration-300"
+                          style={{ width: `${(retryCount / maxRetries) * 100}%` }}
+                        ></div>
+                      </div>
+                    </div>
+                  )}
+                  {lastError && (
+                    <p className="text-xs text-blue-700 dark:text-blue-300 mt-2">
+                      <span className="font-medium">Last error:</span> {lastError}
+                    </p>
+                  )}
+                  {retryCount >= maxRetries && (
+                    <div className="mt-3">
+                      <button
+                        onClick={resetAndRetry}
+                        className="w-full bg-blue-500 hover:bg-blue-600 text-white text-xs font-medium px-4 py-2 rounded-lg transition-colors duration-200"
+                      >
+                        🔄 Reset & Try Again
+                      </button>
+                    </div>
+                  )}
+                </div>
+              </div>
             </div>
           )}
         </div>
       </div>
-
-      {isProcessing && !isRecording && (
-        <p className="text-sm text-blue-600 dark:text-blue-400">
-          Initializing speech recognition...
-        </p>
-      )}
     </div>
   );
 }
