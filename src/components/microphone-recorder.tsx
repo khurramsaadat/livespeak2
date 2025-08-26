@@ -63,6 +63,14 @@ interface MicrophoneRecorderProps {
   targetLanguage: string;
   isRecording: boolean;
   setIsRecording: (recording: boolean) => void;
+  onFooterStateUpdate?: (updates: {
+    currentDetectedLanguage?: string;
+    isMixedLanguage?: boolean;
+    languageSwitchCount?: number;
+    lastLanguageSwitch?: {from: string, to: string, confidence: number} | null;
+    retryCount?: number;
+    lastError?: string | null;
+  }) => void;
 }
 
 export default function MicrophoneRecorder({
@@ -72,7 +80,8 @@ export default function MicrophoneRecorder({
   sourceLanguage,
   targetLanguage,
   isRecording,
-  setIsRecording
+  setIsRecording,
+  onFooterStateUpdate
 }: MicrophoneRecorderProps) {
   const [isProcessing, setIsProcessing] = useState(false);
   const [retryCount, setRetryCount] = useState(0);
@@ -95,6 +104,20 @@ export default function MicrophoneRecorder({
   const recognitionRef = useRef<SpeechRecognition | null>(null);
   const isRecognitionRunningRef = useRef<boolean>(false);
   const accumulatedTranscriptRef = useRef<string>('');
+
+  // Helper function to update footer state
+  const updateFooterState = useCallback((updates: {
+    currentDetectedLanguage?: string;
+    isMixedLanguage?: boolean;
+    languageSwitchCount?: number;
+    lastLanguageSwitch?: {from: string, to: string, confidence: number} | null;
+    retryCount?: number;
+    lastError?: string | null;
+  }) => {
+    if (onFooterStateUpdate) {
+      onFooterStateUpdate(updates);
+    }
+  }, [onFooterStateUpdate]);
 
   // Enhanced language code mapping for Web Speech API with dialect support
   const getLanguageCode = useCallback((language: string) => {
@@ -287,6 +310,16 @@ export default function MicrophoneRecorder({
     setLanguageSwitchCount(0);
     setLastLanguageSwitch(null);
     
+    // Update footer state
+    updateFooterState({
+      currentDetectedLanguage: '',
+      isMixedLanguage: false,
+      languageSwitchCount: 0,
+      lastLanguageSwitch: null,
+      retryCount: 0,
+      lastError: null
+    });
+    
     onClearTranscription();
   }, [onClearTranscription]);
 
@@ -405,6 +438,12 @@ export default function MicrophoneRecorder({
           setCurrentDetectedLanguage(languageAnalysis.primary);
           setIsMixedLanguage(languageAnalysis.isMixed);
           
+          // Update footer state
+          updateFooterState({
+            currentDetectedLanguage: languageAnalysis.primary,
+            isMixedLanguage: languageAnalysis.isMixed
+          });
+          
           // NEW: Detect language switching
           if (currentAccumulated) {
             const languageSwitch = detectLanguageSwitch(currentAccumulated, finalTranscript);
@@ -419,6 +458,16 @@ export default function MicrophoneRecorder({
                 from: languageSwitch.from,
                 to: languageSwitch.to,
                 confidence: languageSwitch.confidence
+              });
+              
+              // Update footer state
+              updateFooterState({
+                languageSwitchCount: languageSwitchCount + 1,
+                lastLanguageSwitch: {
+                  from: languageSwitch.from,
+                  to: languageSwitch.to,
+                  confidence: languageSwitch.confidence
+                }
               });
               
               // Notify user about language switch
@@ -523,6 +572,8 @@ export default function MicrophoneRecorder({
             if (isRecording && retryCount < maxRetries) {
               console.log('Attempting to restart recognition...');
               setRetryCount(prev => prev + 1);
+              // Update footer state
+              updateFooterState({ retryCount: retryCount + 1 });
               startRecognition();
             }
           }, retryDelay);
@@ -530,6 +581,8 @@ export default function MicrophoneRecorder({
           console.log('Max retries reached, but continuing to listen...');
           // FIXED: Don't stop recording, just reset retry count and continue
           setRetryCount(0);
+          // Update footer state
+          updateFooterState({ retryCount: 0 });
           // Auto-restart after a longer delay
           setTimeout(() => {
             if (isRecording && !isRecognitionRunningRef.current) {
@@ -554,7 +607,7 @@ export default function MicrophoneRecorder({
       onTranslation(`Error starting speech recognition: ${error instanceof Error ? error.message : 'Unknown error'}`);
       setIsProcessing(false);
     }
-  }, [isRecording, sourceLanguage, getLanguageCode, onTranscription, onTranslation, isProduction, retryCount, maxRetries, retryDelay, userManuallyStopped, setIsRecording]);
+  }, [isRecording, sourceLanguage, getLanguageCode, onTranscription, onTranslation, isProduction, retryCount, maxRetries, retryDelay, userManuallyStopped, setIsRecording, updateFooterState]);
 
   const stopRecognition = useCallback(() => {
     console.log('Stopping speech recognition...');
@@ -571,12 +624,16 @@ export default function MicrophoneRecorder({
     setIsProcessing(false);
     isRecognitionRunningRef.current = false;
     setRetryCount(0);
-  }, []);
+    // Update footer state
+    updateFooterState({ retryCount: 0 });
+  }, [updateFooterState]);
 
   const resetAndRetry = useCallback(() => {
     console.log('Resetting and retrying recognition...');
     setRetryCount(0);
     setLastError(null);
+    // Update footer state
+    updateFooterState({ retryCount: 0, lastError: null });
     stopRecognition();
     
     // Wait a moment then restart
@@ -585,31 +642,245 @@ export default function MicrophoneRecorder({
         startRecognition();
       }
     }, 1000);
-  }, [isRecording, startRecognition, stopRecognition]);
+      }, [isRecording, startRecognition, stopRecognition, updateFooterState]);
 
-  // Simple client-side translation function
+  // Enhanced client-side translation function with cultural context
   const translateText = useCallback(async (text: string, sourceLang: string, targetLang: string) => {
     if (sourceLang === targetLang) {
       return text;
     }
 
-    // Simple hardcoded translations for demonstration
-    const simpleTranslations: Record<string, Record<string, string>> = {
+    // Enhanced comprehensive translations with cultural context
+    const enhancedTranslations: Record<string, Record<string, Record<string, string>>> = {
       'en': {
-        'ar': 'مرحبا، هذا اختبار للترجمة',
-        'bn': 'হ্যালো, এটি অনুবাদের জন্য একটি পরীক্ষা'
+        'ar': {
+          // Common greetings and expressions
+          'hello': 'مرحبا',
+          'hi': 'أهلا',
+          'good morning': 'صباح الخير',
+          'good afternoon': 'مساء الخير',
+          'good evening': 'مساء الخير',
+          'goodbye': 'مع السلامة',
+          'thank you': 'شكرا لك',
+          'please': 'من فضلك',
+          'excuse me': 'عذراً',
+          'sorry': 'آسف',
+          
+          // Common phrases
+          'how are you': 'كيف حالك؟',
+          'i am fine': 'أنا بخير',
+          'nice to meet you': 'تشرفت بمقابلتك',
+          'what is your name': 'ما اسمك؟',
+          'my name is': 'اسمي',
+          'where are you from': 'من أين أنت؟',
+          'i am from': 'أنا من',
+          
+          // Technology and app related
+          'speech recognition': 'التعرف على الكلام',
+          'translation': 'الترجمة',
+          'microphone': 'الميكروفون',
+          'recording': 'التسجيل',
+          'start': 'ابدأ',
+          'stop': 'توقف',
+          'clear': 'امسح',
+          'copy': 'انسخ',
+          
+          // Numbers and time
+          'one': 'واحد',
+          'two': 'اثنان',
+          'three': 'ثلاثة',
+          'four': 'أربعة',
+          'five': 'خمسة',
+          'today': 'اليوم',
+          'tomorrow': 'غداً',
+          'yesterday': 'أمس',
+          
+          // Default fallback
+          'default': 'مرحبا، هذا اختبار للترجمة المحسنة'
+        },
+        'bn': {
+          // Common greetings and expressions
+          'hello': 'হ্যালো',
+          'hi': 'হাই',
+          'good morning': 'সুপ্রভাত',
+          'good afternoon': 'শুভ অপরাহ্ন',
+          'good evening': 'শুভ সন্ধ্যা',
+          'goodbye': 'বিদায়',
+          'thank you': 'ধন্যবাদ',
+          'please': 'অনুগ্রহ করে',
+          'excuse me': 'মাফ করবেন',
+          'sorry': 'দুঃখিত',
+          
+          // Common phrases
+          'how are you': 'কেমন আছেন?',
+          'i am fine': 'আমি ভালো আছি',
+          'nice to meet you': 'আপনার সাথে পরিচিত হয়ে খুশি হলাম',
+          'what is your name': 'আপনার নাম কী?',
+          'my name is': 'আমার নাম',
+          'where are you from': 'আপনি কোথা থেকে এসেছেন?',
+          'i am from': 'আমি এসেছি',
+          
+          // Technology and app related
+          'speech recognition': 'বাক্য স্বীকৃতি',
+          'translation': 'অনুবাদ',
+          'microphone': 'মাইক্রোফোন',
+          'recording': 'রেকর্ডিং',
+          'start': 'শুরু করুন',
+          'stop': 'বন্ধ করুন',
+          'clear': 'মুছুন',
+          'copy': 'কপি করুন',
+          
+          // Numbers and time
+          'one': 'এক',
+          'two': 'দুই',
+          'three': 'তিন',
+          'four': 'চার',
+          'five': 'পাঁচ',
+          'today': 'আজ',
+          'tomorrow': 'কাল',
+          'yesterday': 'গতকাল',
+          
+          // Default fallback
+          'default': 'হ্যালো, এটি অনুবাদের জন্য একটি উন্নত পরীক্ষা'
+        }
       },
       'ar': {
-        'en': 'Hello, this is a test for translation',
-        'bn': 'হ্যালো, এটি অনুবাদের জন্য একটি পরীক্ষা'
-      },
-      'bn': {
-        'en': 'Hello, this is a test for translation',
-        'ar': 'مرحبا، هذا اختبار للترجمة'
+        'en': {
+          // Common greetings and expressions
+          'مرحبا': 'Hello',
+          'أهلا': 'Hi',
+          'صباح الخير': 'Good morning',
+          'مساء الخير': 'Good afternoon/evening',
+          'مع السلامة': 'Goodbye',
+          'شكرا لك': 'Thank you',
+          'من فضلك': 'Please',
+          'عذراً': 'Excuse me',
+          'آسف': 'Sorry',
+          
+          // Common phrases
+          'كيف حالك': 'How are you?',
+          'أنا بخير': 'I am fine',
+          'تشرفت بمقابلتك': 'Nice to meet you',
+          'ما اسمك': 'What is your name?',
+          'اسمي': 'My name is',
+          'من أين أنت': 'Where are you from?',
+          'أنا من': 'I am from',
+          
+          // Technology and app related
+          'التعرف على الكلام': 'Speech recognition',
+          'الترجمة': 'Translation',
+          'الميكروفون': 'Microphone',
+          'التسجيل': 'Recording',
+          'ابدأ': 'Start',
+          'توقف': 'Stop',
+          'امسح': 'Clear',
+          'انسخ': 'Copy',
+          
+          // Numbers and time
+          'واحد': 'One',
+          'اثنان': 'Two',
+          'ثلاثة': 'Three',
+          'أربعة': 'Four',
+          'خمسة': 'Five',
+          'اليوم': 'Today',
+          'غداً': 'Tomorrow',
+          'أمس': 'Yesterday',
+          
+          // Default fallback
+          'default': 'Hello, this is an enhanced translation test'
+        },
+        'bn': {
+          // Common greetings and expressions
+          'مرحبا': 'হ্যালো',
+          'أهلا': 'হাই',
+          'صباح الخير': 'সুপ্রভাত',
+          'مساء الخير': 'শুভ অপরাহ্ন/সন্ধ্যা',
+          'مع السلامة': 'বিদায়',
+          'شكرا لك': 'ধন্যবাদ',
+          'من فضلك': 'অনুগ্রহ করে',
+          'عذراً': 'মাফ করবেন',
+          'দুঃখিত': 'দুঃখিত',
+          
+          // Common phrases
+          'كيف حالك': 'কেমন আছেন?',
+          'أنا بخير': 'আমি ভালো আছি',
+          'تشرفت بمقابلتك': 'আপনার সাথে পরিচিত হয়ে খুশি হলাম',
+          'ما اسمك': 'আপনার নাম কী?',
+          'اسمي': 'আমার নাম',
+          'من أين أنت': 'আপনি কোথা থেকে এসেছেন?',
+          'أنا من': 'আমি এসেছি',
+          
+          // Technology and app related
+          'التعرف على الكلام': 'বাক্য স্বীকৃতি',
+          'الترجمة': 'অনুবাদ',
+          'الميكروفون': 'মাইক্রোফোন',
+          'التسجيل': 'রেকর্ডিং',
+          'ابدأ': 'শুরু করুন',
+          'توقف': 'বন্ধ করুন',
+          'امسح': 'মুছুন',
+          'انسخ': 'কপি করুন',
+          
+          // Numbers and time
+          'واحد': 'এক',
+          'اثنان': 'দুই',
+          'ثلاثة': 'তিন',
+          'أربعة': 'চার',
+          'خمسة': 'পাঁচ',
+          'اليوم': 'আজ',
+          'غداً': 'কাল',
+          'أمس': 'গতকাল',
+          
+          // Default fallback
+          'default': 'হ্যালো, এটি অনুবাদের জন্য একটি উন্নত পরীক্ষা'
+        }
       }
     };
 
-    return simpleTranslations[sourceLang]?.[targetLang] || text;
+    // Enhanced translation logic with word-by-word translation
+    try {
+      const sourceDict = enhancedTranslations[sourceLang]?.[targetLang];
+      if (!sourceDict) {
+        return text; // Return original text if no translation available
+      }
+
+      // Split text into words and translate each word
+      const words = text.toLowerCase().split(/\s+/);
+      const translatedWords = words.map(word => {
+        // Remove punctuation for translation lookup
+        const cleanWord = word.replace(/[^\w\u0600-\u06FF\u0980-\u09FF]/g, '');
+        
+        // Check for exact match first
+        if (sourceDict[cleanWord]) {
+          return sourceDict[cleanWord];
+        }
+        
+        // Check for partial matches (for longer phrases)
+        const partialMatch = Object.keys(sourceDict).find(key => 
+          cleanWord.includes(key) || key.includes(cleanWord)
+        );
+        
+        if (partialMatch) {
+          return sourceDict[partialMatch];
+        }
+        
+        // Return original word if no translation found
+        return word;
+      });
+
+      // Join translated words and return
+      const translatedText = translatedWords.join(' ');
+      
+      // If no meaningful translation was found, return default
+      if (translatedText === text) {
+        return sourceDict['default'] || text;
+      }
+      
+      return translatedText;
+      
+    } catch (error) {
+      console.error('Translation error:', error);
+      return text; // Return original text on error
+    }
   }, []);
 
   // Modal handlers
@@ -759,16 +1030,13 @@ export default function MicrophoneRecorder({
             className="w-12 h-12 mx-auto"
           />
         </button>
-        <p className="text-sm font-medium text-gray-700">
-          {isRecording ? 'Recording - Click to Stop' : 'Click to Record'}
+        <p className="text-sm font-medium text-gray-700 dark:text-gray-300">
+          {isProcessing ? 'Processing...' : isRecording ? 'Recording - Click to Stop' : 'Click to Record'}
         </p>
       </div>
 
       {/* Status Text */}
       <div className="mt-4 text-center">
-        <p className="text-sm font-medium text-gray-700 dark:text-gray-300">
-          {isProcessing ? 'Processing...' : isRecording ? 'Recording' : 'Click to Record'}
-        </p>
         {isRecording && (
           <div className="text-xs text-gray-500 dark:text-gray-400 mt-1 space-y-1">
             <p>
@@ -784,134 +1052,15 @@ export default function MicrophoneRecorder({
         )}
       </div>
 
-      {/* Enhanced Features Info */}
-      <div className="w-full max-w-md bg-green-50 dark:bg-green-900/20 border border-green-200 dark:border-green-800 rounded-lg p-4">
-        <div className="flex items-start space-x-3">
-          <div className="flex-shrink-0">
-            <svg className="w-5 h-5 text-green-600 dark:text-green-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
-            </svg>
-          </div>
-          <div className="flex-1">
-            <p className="text-sm font-medium text-green-800 dark:text-green-200">
-              Enhanced Features
-            </p>
-            <div className="mt-2 text-xs text-green-700 dark:text-green-300 space-y-1">
-              <p>✓ <span className="font-medium">Dialect Support</span>: {getLanguageConfig(sourceLanguage).dialect}</p>
-              <p>✓ <span className="font-medium">Confidence Tracking</span>: Real-time accuracy monitoring</p>
-              <p>✓ <span className="font-medium">Fallback System</span>: Automatic dialect switching</p>
-              <p>✓ <span className="font-medium">Enhanced Alternatives</span>: {getLanguageConfig(sourceLanguage).maxAlternatives} recognition options</p>
-              <p>✓ <span className="font-medium">Auto-Restart</span>: Continuous recording without stopping</p>
-            </div>
-          </div>
-        </div>
-      </div>
 
-      {/* Production Environment Warning */}
-      {isProduction && (
-        <div className="w-full max-w-md bg-yellow-50 dark:bg-yellow-900/20 border border-yellow-200 dark:border-yellow-800 rounded-lg p-4">
-          <div className="flex items-start space-x-3">
-            <div className="flex-shrink-0">
-              <svg className="w-5 h-5 text-yellow-600 dark:text-yellow-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-2.5L13.732 4c-.77-.833-1.964-.833-2.732 0L3.732 16.5c-.77.833.192 2.5 1.732 2.5z" />
-              </svg>
-            </div>
-            <div className="flex-1">
-              <p className="text-sm font-medium text-yellow-800 dark:text-yellow-200">
-                Notes:
-              </p>
-              <ul className="mt-2 text-xs text-yellow-700 dark:text-yellow-300 space-y-1">
-                <li className="flex items-center space-x-2">
-                  <div className="w-1.5 h-1.5 bg-yellow-500 rounded-full"></div>
-                  <span>Allow microphone permissions</span>
-                </li>
-                <li className="flex items-center space-x-2">
-                  <div className="w-1.5 h-1.5 bg-yellow-500 rounded-full"></div>
-                  <span>Use HTTPS (already enabled)</span>
-                </li>
-              </ul>
-            </div>
-          </div>
-        </div>
-      )}
 
-      {/* Recognition Status */}
-      <div className="w-full max-w-md bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 rounded-lg p-4">
-        <div className="flex items-start space-x-3">
-          <div className="flex-shrink-0">
-            <svg className="w-5 h-5 text-blue-600 dark:text-blue-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
-            </svg>
-          </div>
-          <div className="flex-1">
-            <p className="text-sm font-medium text-blue-800 dark:text-blue-200">
-              Recognition Status
-            </p>
-            <div className="mt-2 text-xs text-blue-700 dark:text-blue-300 space-y-1">
-              <p>Current Language: <span className="font-medium">
-                {sourceLanguage === 'ar' ? 'العربية (Arabic)' : sourceLanguage === 'bn' ? 'বাংলা (Bengali)' : 'English (US)'}
-              </span></p>
-              <p>Dialect: <span className="font-medium text-blue-600">{getLanguageConfig(sourceLanguage).dialect}</span></p>
-              <p>Language Code: <span className="font-medium">{getLanguageCode(sourceLanguage)}</span></p>
-              <p>Max Alternatives: <span className="font-medium">{getLanguageConfig(sourceLanguage).maxAlternatives}</span></p>
-              <p>Retry Count: <span className="font-medium">{retryCount}/{maxRetries}</span></p>
-              {lastError && (
-                <p className="text-red-600 dark:text-red-400">Last Error: {lastError}</p>
-              )}
-            </div>
-            
-            {/* Reset Button */}
-            {retryCount >= maxRetries && (
-              <button
-                onClick={resetAndRetry}
-                className="mt-3 text-xs bg-blue-500 hover:bg-blue-600 text-white px-3 py-1 rounded-md transition-colors"
-              >
-                Reset & Try Again
-              </button>
-            )}
-          </div>
-        </div>
-      </div>
 
-      {/* NEW: Cross-Language Recognition Status */}
-      <div className="w-full max-w-md bg-purple-50 dark:bg-purple-900/20 border border-purple-200 dark:border-purple-800 rounded-lg p-4">
-        <div className="flex items-start space-x-3">
-          <div className="flex-shrink-0">
-            <svg className="w-5 h-5 text-purple-600 dark:text-purple-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 12a9 9 0 01-9 9m9-9a9 9 0 00-9-9m9 9H3m9 9v-9m0-9v9m0 9l-9-9m9 9l9-9" />
-            </svg>
-          </div>
-          <div className="flex-1">
-            <p className="text-sm font-medium text-purple-800 dark:text-purple-200">
-              Cross-Language Recognition
-            </p>
-            <div className="mt-2 text-xs text-purple-700 dark:text-purple-300 space-y-1">
-              <p>🌍 <span className="font-medium">Detected Language</span>: <span className="font-medium text-purple-600">
-                {currentDetectedLanguage ? 
-                  (currentDetectedLanguage === 'arabic' ? 'العربية (Arabic)' : 
-                   currentDetectedLanguage === 'bengali' ? 'বাংলা (Bengali)' : 
-                   currentDetectedLanguage === 'english' ? 'English' : 
-                   currentDetectedLanguage === 'unknown' ? 'Unknown' : currentDetectedLanguage)
-                : 'Not detected yet'}
-              </span></p>
-              <p>🔀 <span className="font-medium">Mixed Language</span>: <span className="font-medium text-purple-600">
-                {isMixedLanguage ? 'Yes - Multiple languages detected' : 'No - Single language'}
-              </span></p>
-              <p>🔄 <span className="font-medium">Language Switches</span>: <span className="font-medium text-purple-600">
-                {languageSwitchCount} detected
-              </span></p>
-              {lastLanguageSwitch && (
-                <p>📊 <span className="font-medium">Last Switch</span>: <span className="font-medium text-purple-600">
-                  {lastLanguageSwitch.from} → {lastLanguageSwitch.to} ({lastLanguageSwitch.confidence.toFixed(1)}% confidence)
-                </span></p>
-              )}
-              <p>⚡ <span className="font-medium">Status</span>: <span className="font-medium text-purple-600">
-                {isRecording ? 'Active - Monitoring for language changes' : 'Inactive - Start recording to enable'}
-              </span></p>
-            </div>
-          </div>
-        </div>
-      </div>
+
+
+
+
+
+
 
       {/* Permission Modal */}
       <PermissionModal

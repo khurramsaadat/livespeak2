@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import MicrophoneRecorder from "@/components/microphone-recorder";
+import Footer from "@/components/footer";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import {
   Select,
@@ -19,6 +20,15 @@ export default function Home() {
   const [sourceLanguage, setSourceLanguage] = useState("en");
   const [targetLanguage, setTargetLanguage] = useState("en");
   const [copyFeedback, setCopyFeedback] = useState<{transcription: boolean, translation: boolean}>({transcription: false, translation: false});
+
+  // Footer state variables
+  const [currentDetectedLanguage, setCurrentDetectedLanguage] = useState("");
+  const [isMixedLanguage, setIsMixedLanguage] = useState(false);
+  const [languageSwitchCount, setLanguageSwitchCount] = useState(0);
+  const [lastLanguageSwitch, setLastLanguageSwitch] = useState<{from: string, to: string, confidence: number} | null>(null);
+  const [retryCount, setRetryCount] = useState(0);
+  const [maxRetries] = useState(50);
+  const [lastError, setLastError] = useState<string | null>(null);
 
   const handleTranscriptionUpdate = (newSegment: string, isFinal: boolean) => {
     if (isFinal) {
@@ -40,6 +50,48 @@ export default function Home() {
     setTimeout(() => {
       setCopyFeedback(prev => ({ ...prev, [type]: false }));
     }, 2000);
+  };
+
+  // Helper functions for footer
+  const getLanguageConfig = (lang: string) => {
+    const configs = {
+      'en': { dialect: 'English (US)', maxAlternatives: 4 },
+      'ar': { dialect: 'Palestinian Arabic', maxAlternatives: 4 },
+      'bn': { dialect: 'Standard Bengali', maxAlternatives: 4 }
+    };
+    return configs[lang as keyof typeof configs] || configs['en'];
+  };
+
+  const getLanguageCode = (lang: string) => {
+    const codes = {
+      'en': 'en-US',
+      'ar': 'ar-PS',
+      'bn': 'bn-BD'
+    };
+    return codes[lang as keyof typeof codes] || 'en-US';
+  };
+
+  const resetAndRetry = () => {
+    setRetryCount(0);
+    setLastError(null);
+    // Additional reset logic can be added here
+  };
+
+  // Update footer state from microphone recorder
+  const handleFooterStateUpdate = (updates: {
+    currentDetectedLanguage?: string;
+    isMixedLanguage?: boolean;
+    languageSwitchCount?: number;
+    lastLanguageSwitch?: {from: string, to: string, confidence: number} | null;
+    retryCount?: number;
+    lastError?: string | null;
+  }) => {
+    if (updates.currentDetectedLanguage !== undefined) setCurrentDetectedLanguage(updates.currentDetectedLanguage);
+    if (updates.isMixedLanguage !== undefined) setIsMixedLanguage(updates.isMixedLanguage);
+    if (updates.languageSwitchCount !== undefined) setLanguageSwitchCount(updates.languageSwitchCount);
+    if (updates.lastLanguageSwitch !== undefined) setLastLanguageSwitch(updates.lastLanguageSwitch);
+    if (updates.retryCount !== undefined) setRetryCount(updates.retryCount);
+    if (updates.lastError !== undefined) setLastError(updates.lastError);
   };
 
   return (
@@ -328,9 +380,27 @@ export default function Home() {
             targetLanguage={targetLanguage}
             sourceLanguage={sourceLanguage}
             onClearTranscription={handleClearTranscription}
+            onFooterStateUpdate={handleFooterStateUpdate}
           />
         </div>
       </div>
+
+      {/* Footer */}
+      <Footer
+        sourceLanguage={sourceLanguage}
+        targetLanguage={targetLanguage}
+        isRecording={isRecording}
+        currentDetectedLanguage={currentDetectedLanguage}
+        isMixedLanguage={isMixedLanguage}
+        languageSwitchCount={languageSwitchCount}
+        lastLanguageSwitch={lastLanguageSwitch}
+        retryCount={retryCount}
+        maxRetries={maxRetries}
+        lastError={lastError}
+        getLanguageConfig={getLanguageConfig}
+        getLanguageCode={getLanguageCode}
+        resetAndRetry={resetAndRetry}
+      />
     </div>
   );
 }
