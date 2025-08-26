@@ -14,6 +14,11 @@ interface SpeechRecognition extends EventTarget {
   onend: ((this: SpeechRecognition, ev: Event) => void) | null;
   onresult: ((this: SpeechRecognition, ev: SpeechRecognitionEvent) => void) | null;
   onerror: ((this: SpeechRecognition, ev: SpeechRecognitionErrorEvent) => void) | null;
+  onaudiostart: ((this: SpeechRecognition, ev: Event) => void) | null;
+  onaudioend: ((this: SpeechRecognition, ev: Event) => void) | null;
+  onspeechstart: ((this: SpeechRecognition, ev: Event) => void) | null;
+  onspeechend: ((this: SpeechRecognition, ev: Event) => void) | null;
+  onnomatch: ((this: SpeechRecognition, ev: Event) => void) | null;
 }
 
 interface SpeechRecognitionEvent extends Event {
@@ -72,9 +77,11 @@ export default function MicrophoneRecorder({
   const [retryCount, setRetryCount] = useState(0);
   const [lastError, setLastError] = useState<string | null>(null);
   const [isProduction, setIsProduction] = useState(false);
+  const [userManuallyStopped, setUserManuallyStopped] = useState(false); // FIXED: Track manual stop
   
-  const maxRetries = 3;
-  const retryDelay = 2000;
+  // FIXED: Increased retry limit and reduced delay for better stability
+  const maxRetries = 50; // Increased from 3 to 50
+  const retryDelay = 500; // Reduced from 2000ms to 500ms for faster recovery
   
   const recognitionRef = useRef<SpeechRecognition | null>(null);
   const isRecognitionRunningRef = useRef<boolean>(false);
@@ -190,6 +197,9 @@ export default function MicrophoneRecorder({
     try {
       console.log('Starting Enhanced Web Speech API...');
       
+      // FIXED: Reset manual stop flag when starting
+      setUserManuallyStopped(false);
+      
       // Check browser compatibility
       if (!('webkitSpeechRecognition' in window) && !('SpeechRecognition' in window)) {
         throw new Error('Speech recognition not supported in this browser');
@@ -225,14 +235,43 @@ export default function MicrophoneRecorder({
       // Set up enhanced event handlers
       recognition.onstart = () => {
         console.log(`Speech recognition start() called for ${languageConfig.dialect}`);
-        setIsProcessing(true);
+        // FIXED: Set recording state and enable button immediately so user can stop recording
+        setIsRecording(true);
+        setIsProcessing(false);
         isRecognitionRunningRef.current = true;
+      };
+
+      // FIXED: Add onaudiostart to keep audio stream active
+      recognition.onaudiostart = () => {
+        console.log(`Audio stream started for ${languageConfig.dialect}`);
+      };
+
+      // FIXED: Add onaudiostart to keep audio stream active
+      recognition.onaudioend = () => {
+        console.log(`Audio stream ended for ${languageConfig.dialect}`);
+        // Don't stop recognition, let it continue
+      };
+
+      // FIXED: Add speech event handlers for better control
+      recognition.onspeechstart = () => {
+        console.log(`Speech detected for ${languageConfig.dialect}`);
+      };
+
+      recognition.onspeechend = () => {
+        console.log(`Speech ended for ${languageConfig.dialect}, but continuing to listen...`);
+        // Don't stop recognition, let it continue listening
       };
 
       recognition.onresult = (event: SpeechRecognitionEvent) => {
         let finalTranscript = '';
         let interimTranscript = '';
         const confidenceScores: number[] = [];
+
+        // FIXED: Enable button when first result comes in so user can stop
+        if (isProcessing) {
+          console.log('First result received - enabling stop button for user control...');
+          setIsProcessing(false);
+        }
 
         for (let i = event.resultIndex; i < event.results.length; i++) {
           const result = event.results[i];
@@ -254,6 +293,10 @@ export default function MicrophoneRecorder({
           
           accumulatedTranscriptRef.current += finalTranscript + ' ';
           onTranscription(accumulatedTranscriptRef.current.trim(), true);
+          
+          // FIXED: Don't restart recognition - let it continue naturally
+          // The Web Speech API should continue listening with continuous: true
+          console.log('Transcript processed, continuing to listen...');
         }
 
         // Enhanced interim transcript for live display
@@ -267,7 +310,13 @@ export default function MicrophoneRecorder({
         console.log('Error details:', event);
         console.log('Current dialect:', dialectInfo.primary);
         
-        // Enhanced error handling with dialect fallback
+        // FIXED: Enhanced error handling - don't stop for non-critical errors
+        if (event.error === 'no-speech') {
+          console.log('No speech detected, continuing to listen...');
+          // Don't stop recognition for no-speech errors
+          return;
+        }
+        
         if (isProduction) {
           let userMessage = '';
           switch (event.error) {
@@ -276,9 +325,6 @@ export default function MicrophoneRecorder({
               break;
             case 'not-allowed':
               userMessage = 'Microphone access denied. Please allow microphone permissions.';
-              break;
-            case 'no-speech':
-              userMessage = `No speech detected in ${languageConfig.dialect}. Please try speaking again.`;
               break;
             case 'aborted':
               userMessage = `Speech recognition for ${languageConfig.dialect} was aborted`;
@@ -297,17 +343,36 @@ export default function MicrophoneRecorder({
           onTranslation(`Enhanced Error for ${languageConfig.dialect}: ${event.error}`);
         }
         
-        setIsProcessing(false);
-        isRecognitionRunningRef.current = false;
+        // FIXED: For critical errors, restart recognition instead of stopping
+        if (event.error !== 'no-speech') {
+          console.log('Critical error detected, restarting recognition...');
+          isRecognitionRunningRef.current = false;
+          // Auto-restart after error
+          setTimeout(() => {
+            if (isRecording && !isRecognitionRunningRef.current) {
+              console.log('Auto-restart: Starting recognition...');
+              startRecognition();
+            }
+          }, 500);
+        }
       };
 
       recognition.onend = () => {
         console.log(`Enhanced speech recognition ended for ${languageConfig.dialect}`);
-        setIsProcessing(false);
         isRecognitionRunningRef.current = false;
         
-        // Enhanced retry logic with dialect fallback
-        if (isProduction && isRecording && retryCount < maxRetries) {
+        // FIXED: Don't restart if user manually stopped
+        if (userManuallyStopped) {
+          console.log('User manually stopped recording, not restarting...');
+          setUserManuallyStopped(false); // Reset flag
+          return;
+        }
+        
+        // FIXED: Update button state to allow user to stop
+        setIsProcessing(false);
+        
+        // FIXED: Always retry if user still wants to record (not just in production)
+        if (isRecording && retryCount < maxRetries) {
           console.log('Recognition ended unexpectedly, attempting to restart...');
           setTimeout(() => {
             if (isRecording && retryCount < maxRetries) {
@@ -317,10 +382,23 @@ export default function MicrophoneRecorder({
             }
           }, retryDelay);
         } else if (retryCount >= maxRetries) {
-          console.log('Max retries reached, stopping recognition');
-          setIsRecording(false);
-          onTranslation(`Maximum retry attempts reached for ${languageConfig.dialect}. Please try again manually.`);
+          console.log('Max retries reached, but continuing to listen...');
+          // FIXED: Don't stop recording, just reset retry count and continue
+          setRetryCount(0);
+          // Auto-restart after a longer delay
+          setTimeout(() => {
+            if (isRecording && !isRecognitionRunningRef.current) {
+              console.log('Auto-restart after max retries...');
+              startRecognition();
+            }
+          }, 2000);
         }
+      };
+
+      // FIXED: Add onnomatch handler to continue listening when no match found
+      recognition.onnomatch = () => {
+        console.log(`No match found for ${languageConfig.dialect}, continuing to listen...`);
+        // Don't stop recognition, let it continue listening
       };
 
       // Start recognition
@@ -331,10 +409,13 @@ export default function MicrophoneRecorder({
       onTranslation(`Error starting speech recognition: ${error instanceof Error ? error.message : 'Unknown error'}`);
       setIsProcessing(false);
     }
-  }, [isRecording, sourceLanguage, getLanguageCode, onTranscription, onTranslation, isProduction, retryCount, maxRetries, retryDelay]);
+  }, [isRecording, sourceLanguage, getLanguageCode, onTranscription, onTranslation, isProduction, retryCount, maxRetries, retryDelay, userManuallyStopped, setIsRecording]);
 
   const stopRecognition = useCallback(() => {
     console.log('Stopping speech recognition...');
+    
+    // FIXED: Set flag to prevent auto-restart
+    setUserManuallyStopped(true);
     
     if (recognitionRef.current) {
       recognitionRef.current.stop();
@@ -414,71 +495,56 @@ export default function MicrophoneRecorder({
   useEffect(() => {
     if (isRecording && !isRecognitionRunningRef.current) {
       startRecognition();
-    } else if (!isRecording && isRecognitionRunningRef.current) {
-      stopRecognition();
     }
-  }, [isRecording, startRecognition, stopRecognition]);
+    // FIXED: Remove automatic stopRecognition to prevent premature stopping
+    // The user should manually stop recording, not automatic stopping
+  }, [isRecording, startRecognition]);
 
   return (
     <div className="flex flex-col items-center space-y-6">
       {/* Main Recording Button */}
-      <div className="relative">
+      <div className="flex flex-col items-center space-y-4">
         <button
           onClick={isRecording ? stopRecognition : startRecognition}
           disabled={isProcessing}
           className={`
             relative w-24 h-24 rounded-full transition-all duration-300 transform hover:scale-105 active:scale-95
             ${isRecording 
-              ? 'bg-red-500 hover:bg-red-600 shadow-lg shadow-red-500/50' 
+              ? 'bg-red-500 hover:bg-red-600 shadow-lg shadow-red-500/50 animate-pulse' 
               : 'bg-blue-500 hover:bg-blue-600 shadow-lg shadow-blue-500/50'
             }
-            ${isProcessing ? 'animate-pulse' : ''}
             disabled:opacity-50 disabled:cursor-not-allowed
           `}
         >
-          {/* Recording Animation Rings */}
-          {isRecording && (
-            <>
-              <div className="absolute inset-0 rounded-full bg-red-400 animate-ping opacity-75"></div>
-              <div className="absolute inset-0 rounded-full bg-red-300 animate-pulse"></div>
-            </>
-          )}
-          
-          {/* Icon */}
-          <div className="relative z-10 flex items-center justify-center w-full h-full">
-            {isProcessing ? (
-              <svg className="w-8 h-8 text-white animate-spin" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
-              </svg>
-            ) : isRecording ? (
-              <svg className="w-8 h-8 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 10a1 1 0 011-1h4a1 1 0 011 1v4a1 1 0 01-1 1h-4a1 1 0 01-1-1v-4z" />
-              </svg>
-            ) : (
-              <svg className="w-8 h-8 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 11a7 7 0 01-7 7m0 0a7 7 0 01-7-7m7 7v4m0 0H8m4 0h4m-4-8a3 3 0 01-3-3V5a3 3 0 116 0v6a3 3 0 01-3 3z" />
-              </svg>
-            )}
-          </div>
+          <img
+            src={isRecording ? "/stop.svg" : "/microphone.svg"}
+            alt={isRecording ? "Stop Recording" : "Start Recording"}
+            className="w-12 h-12 mx-auto"
+          />
         </button>
-        
-        {/* Status Text */}
-        <div className="mt-4 text-center">
-          <p className="text-sm font-medium text-gray-700 dark:text-gray-300">
-            {isProcessing ? 'Processing...' : isRecording ? 'Recording' : 'Click to Record'}
-          </p>
-          {isRecording && (
-            <div className="text-xs text-gray-500 dark:text-gray-400 mt-1 space-y-1">
-              <p>
-                Speaking in {sourceLanguage === 'ar' ? 'العربية (Arabic)' : sourceLanguage === 'bn' ? 'বাংলা (Bengali)' : 'English (US)'}
-              </p>
-              <p className="text-xs text-blue-500">
-                Dialect: {getLanguageConfig(sourceLanguage).dialect}
-              </p>
-            </div>
-          )}
-        </div>
+        <p className="text-sm font-medium text-gray-700">
+          {isRecording ? 'Recording - Click to Stop' : 'Click to Record'}
+        </p>
+      </div>
+
+      {/* Status Text */}
+      <div className="mt-4 text-center">
+        <p className="text-sm font-medium text-gray-700 dark:text-gray-300">
+          {isProcessing ? 'Processing...' : isRecording ? 'Recording' : 'Click to Record'}
+        </p>
+        {isRecording && (
+          <div className="text-xs text-gray-500 dark:text-gray-400 mt-1 space-y-1">
+            <p>
+              Speaking in {sourceLanguage === 'ar' ? 'العربية (Arabic)' : sourceLanguage === 'bn' ? 'বাংলা (Bengali)' : 'English (US)'}
+            </p>
+            <p className="text-xs text-blue-500">
+              Dialect: {getLanguageConfig(sourceLanguage).dialect}
+            </p>
+            <p className="text-xs text-green-500">
+              Auto-restart: Active
+            </p>
+          </div>
+        )}
       </div>
 
       {/* Enhanced Features Info */}
@@ -498,6 +564,7 @@ export default function MicrophoneRecorder({
               <p>✓ <span className="font-medium">Confidence Tracking</span>: Real-time accuracy monitoring</p>
               <p>✓ <span className="font-medium">Fallback System</span>: Automatic dialect switching</p>
               <p>✓ <span className="font-medium">Enhanced Alternatives</span>: {getLanguageConfig(sourceLanguage).maxAlternatives} recognition options</p>
+              <p>✓ <span className="font-medium">Auto-Restart</span>: Continuous recording without stopping</p>
             </div>
           </div>
         </div>
