@@ -1,6 +1,7 @@
 'use client';
 
 import React, { useState, useRef, useCallback, useEffect } from 'react';
+import PermissionModal from './permission-modal';
 
 // Web Speech API type definitions
 interface SpeechRecognition extends EventTarget {
@@ -77,7 +78,9 @@ export default function MicrophoneRecorder({
   const [retryCount, setRetryCount] = useState(0);
   const [lastError, setLastError] = useState<string | null>(null);
   const [isProduction, setIsProduction] = useState(false);
-  const [userManuallyStopped, setUserManuallyStopped] = useState(false); // FIXED: Track manual stop
+  const [userManuallyStopped, setUserManuallyStopped] = useState(false);
+  const [microphonePermission, setMicrophonePermission] = useState<'granted' | 'denied' | 'prompt' | 'checking'>('checking');
+  const [showPermissionModal, setShowPermissionModal] = useState(false);
   
   // FIXED: Increased retry limit and reduced delay for better stability
   const maxRetries = 50; // Increased from 3 to 50
@@ -235,7 +238,7 @@ export default function MicrophoneRecorder({
       // Set up enhanced event handlers
       recognition.onstart = () => {
         console.log(`Speech recognition start() called for ${languageConfig.dialect}`);
-        // FIXED: Set recording state and enable button immediately so user can stop recording
+        // FIXED: Set recording state and enable button immediately so user can stop
         setIsRecording(true);
         setIsProcessing(false);
         isRecognitionRunningRef.current = true;
@@ -448,36 +451,52 @@ export default function MicrophoneRecorder({
       return text;
     }
 
-    // Simple hardcoded translations for demo purposes
-    const simpleTranslations: { [key: string]: { [key: string]: string } } = {
-      en: {
-        ar: "مرحبا، أنا واثق من أن هذا التطبيق سيعمل بشكل جيد. شكرا لك.",
-        bn: "হ্যালো, আমি নিশ্চিত যে এই অ্যাপটি খুব ভালভাবে কাজ করবে। আপনাকে ধন্যবাদ।"
+    // Simple hardcoded translations for demonstration
+    const simpleTranslations: Record<string, Record<string, string>> = {
+      'en': {
+        'ar': 'مرحبا، هذا اختبار للترجمة',
+        'bn': 'হ্যালো, এটি অনুবাদের জন্য একটি পরীক্ষা'
       },
-      ar: {
-        en: "Hello, I'm confident that this app will work very well. Thank you.",
-        bn: "হ্যালো, আমি নিশ্চিত যে এই অ্যাপটি খুব ভালভাবে কাজ করবে। আপনাকে ধন্যবাদ।"
+      'ar': {
+        'en': 'Hello, this is a test for translation',
+        'bn': 'হ্যালো, এটি অনুবাদের জন্য একটি পরীক্ষা'
       },
-      bn: {
-        en: "Hello, I'm confident that this app will work very well. Thank you.",
-        ar: "مرحبا، أنا واثق من أن هذا التطبيق سيعمل بشكل جيد. شكرا لك."
+      'bn': {
+        'en': 'Hello, this is a test for translation',
+        'ar': 'مرحبا، هذا اختبار للترجمة'
       }
     };
 
-    try {
-      // Use hardcoded translations for now
-      const translation = simpleTranslations[sourceLang]?.[targetLang];
-      if (translation) {
-        return translation;
-      }
-      
-      // Fallback: return original text if no translation found
-      return text;
-    } catch (error) {
-      console.error('Translation error:', error);
-      return `Translation error: ${error instanceof Error ? error.message : 'Unknown error'}`;
-    }
+    return simpleTranslations[sourceLang]?.[targetLang] || text;
   }, []);
+
+  // Modal handlers
+  const handleAllowAccess = async () => {
+    try {
+      console.log('Requesting microphone permission...');
+      setMicrophonePermission('checking');
+      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+      console.log('Microphone permission granted');
+      setMicrophonePermission('granted');
+      setShowPermissionModal(false);
+      // Stop the stream immediately after getting permission
+      stream.getTracks().forEach(track => track.stop());
+    } catch (error) {
+      console.error('Microphone permission denied:', error);
+      setMicrophonePermission('denied');
+      onTranslation('Microphone access was denied. You can still use LiveSpeak, but recording features will be limited.');
+    }
+  };
+
+  const handleMaybeLater = () => {
+    setShowPermissionModal(false);
+    setMicrophonePermission('denied');
+    onTranslation('No problem! You can enable microphone access anytime in your browser settings.');
+  };
+
+  const handleCloseModal = () => {
+    setShowPermissionModal(false);
+  };
 
   // Handle transcription updates in a separate effect to avoid render conflicts
   useEffect(() => {
@@ -500,13 +519,89 @@ export default function MicrophoneRecorder({
     // The user should manually stop recording, not automatic stopping
   }, [isRecording, startRecognition]);
 
+  // Request microphone permission when component mounts
+  useEffect(() => {
+    const checkMicrophonePermission = async () => {
+      try {
+        // Check if microphone permission is already granted
+        if (navigator.permissions) {
+          const permissionStatus = await navigator.permissions.query({ name: 'microphone' as PermissionName });
+          
+          if (permissionStatus.state === 'granted') {
+            console.log('Microphone permission already granted');
+            setMicrophonePermission('granted');
+          } else if (permissionStatus.state === 'prompt') {
+            console.log('Microphone permission needs to be requested');
+            setMicrophonePermission('prompt');
+            // Show the beautiful modal instead of automatic request
+            setShowPermissionModal(true);
+          } else {
+            console.log('Microphone permission denied');
+            setMicrophonePermission('denied');
+            // Show the modal to give user another chance
+            setShowPermissionModal(true);
+          }
+        } else {
+          // Fallback for browsers that don't support permissions API
+          console.log('Permissions API not supported, showing modal...');
+          setMicrophonePermission('prompt');
+          setShowPermissionModal(true);
+        }
+      } catch (error) {
+        console.error('Error checking microphone permission:', error);
+        setMicrophonePermission('prompt');
+        setShowPermissionModal(true);
+      }
+    };
+
+    // Check permission after a short delay to let the page load
+    const timer = setTimeout(checkMicrophonePermission, 1000);
+    return () => clearTimeout(timer);
+  }, []);
+
   return (
     <div className="flex flex-col items-center space-y-6">
       {/* Main Recording Button */}
       <div className="flex flex-col items-center space-y-4">
+        {/* Microphone Permission Status */}
+        <div className="text-center">
+          {microphonePermission === 'checking' && (
+            <div className="flex items-center justify-center space-x-2 text-blue-600">
+              <svg className="w-4 h-4 animate-spin" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+              </svg>
+              <span className="text-sm">Checking microphone access...</span>
+            </div>
+          )}
+          {microphonePermission === 'prompt' && (
+            <div className="flex items-center justify-center space-x-2 text-yellow-600">
+              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-2.5L13.732 4c-.77-.833-1.964-.833-2.732 0L3.732 16.5c-.77.833.192 2.5 1.732 2.5z" />
+              </svg>
+              <span className="text-sm">Please allow microphone access</span>
+            </div>
+          )}
+          {microphonePermission === 'granted' && (
+            <div className="flex items-center justify-center space-x-2 text-green-600">
+              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
+              </svg>
+              <span className="text-sm">Microphone access granted</span>
+            </div>
+          )}
+          {microphonePermission === 'denied' && (
+            <div className="flex items-center justify-center space-x-2 text-red-600">
+              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-2.5L13.732 4c-.77-.833-1.964-.833-2.732 0L3.732 16.5c-.77.833.192 2.5 1.732 2.5z" />
+              </svg>
+              <span className="text-sm">Microphone access denied</span>
+            </div>
+          )}
+        </div>
+        
         <button
           onClick={isRecording ? stopRecognition : startRecognition}
-          disabled={isProcessing}
+          disabled={isProcessing || microphonePermission === 'denied'}
           className={`
             relative w-24 h-24 rounded-full transition-all duration-300 transform hover:scale-105 active:scale-95
             ${isRecording 
@@ -635,6 +730,14 @@ export default function MicrophoneRecorder({
           </div>
         </div>
       </div>
+
+      {/* Permission Modal */}
+      <PermissionModal
+        isOpen={showPermissionModal}
+        onAllow={handleAllowAccess}
+        onMaybeLater={handleMaybeLater}
+        onClose={handleCloseModal}
+      />
     </div>
   );
 }
