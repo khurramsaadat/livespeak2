@@ -82,6 +82,12 @@ export default function MicrophoneRecorder({
   const [microphonePermission, setMicrophonePermission] = useState<'granted' | 'denied' | 'prompt' | 'checking'>('checking');
   const [showPermissionModal, setShowPermissionModal] = useState(false);
   
+  // NEW: Cross-language recognition state
+  const [currentDetectedLanguage, setCurrentDetectedLanguage] = useState<string>('');
+  const [isMixedLanguage, setIsMixedLanguage] = useState(false);
+  const [languageSwitchCount, setLanguageSwitchCount] = useState(0);
+  const [lastLanguageSwitch, setLastLanguageSwitch] = useState<{from: string, to: string, confidence: number} | null>(null);
+  
   // FIXED: Increased retry limit and reduced delay for better stability
   const maxRetries = 50; // Increased from 3 to 50
   const retryDelay = 500; // Reduced from 2000ms to 500ms for faster recovery
@@ -178,6 +184,92 @@ export default function MicrophoneRecorder({
     };
   }, [getLanguageCode]);
 
+  // NEW: Cross-language recognition and code-switching support
+  const detectLanguageInText = useCallback((text: string) => {
+    // Language detection patterns
+    const languagePatterns = {
+      arabic: /[\u0600-\u06FF\u0750-\u077F\u08A0-\u08FF\uFB50-\uFDFF\uFE70-\uFEFF]/,
+      bengali: /[\u0980-\u09FF]/,
+      english: /[a-zA-Z]/,
+      numbers: /[0-9]/
+    };
+
+    const detectedLanguages: { [key: string]: number } = {
+      arabic: 0,
+      bengali: 0,
+      english: 0,
+      numbers: 0
+    };
+
+    // Count characters for each language
+    for (const [lang, pattern] of Object.entries(languagePatterns)) {
+      const matches = text.match(pattern);
+      if (matches) {
+        detectedLanguages[lang] = matches.length;
+      }
+    }
+
+    // Determine primary language
+    const totalChars = text.length;
+    const languagePercentages = Object.entries(detectedLanguages).map(([lang, count]) => ({
+      language: lang,
+      percentage: (count / totalChars) * 100
+    }));
+
+    // Sort by percentage
+    languagePercentages.sort((a, b) => b.percentage - a.percentage);
+
+    return {
+      primary: languagePercentages[0]?.language || 'unknown',
+      percentages: languagePercentages,
+      isMixed: languagePercentages.filter(l => l.percentage > 10).length > 1,
+      confidence: languagePercentages[0]?.percentage || 0
+    };
+  }, []);
+
+  // NEW: Enhanced language switching detection
+  const detectLanguageSwitch = useCallback((currentText: string, newText: string) => {
+    const currentLang = detectLanguageInText(currentText);
+    const newLang = detectLanguageInText(newText);
+    
+    // Check if there's a significant language change
+    const languageChanged = currentLang.primary !== newLang.primary;
+    const confidenceThreshold = 30; // Minimum confidence for language detection
+    
+    if (languageChanged && newLang.confidence > confidenceThreshold) {
+      console.log(`Language switch detected: ${currentLang.primary} → ${newLang.primary}`);
+      console.log(`Confidence: ${newLang.confidence.toFixed(1)}%`);
+      
+      return {
+        switched: true,
+        from: currentLang.primary,
+        to: newLang.primary,
+        confidence: newLang.confidence,
+        isMixed: newLang.isMixed
+      };
+    }
+    
+    return { switched: false };
+  }, [detectLanguageInText]);
+
+  // NEW: Smart language configuration for mixed speech
+  const getOptimalLanguageConfig = useCallback((primaryLanguage: string, detectedLanguages: string[]) => {
+    const baseConfig = getLanguageConfig(primaryLanguage);
+    
+    // Enhanced configuration for mixed language speech
+    if (detectedLanguages.length > 1) {
+      return {
+        ...baseConfig,
+        maxAlternatives: Math.max(baseConfig.maxAlternatives, 5), // More alternatives for mixed speech
+        continuous: true, // Always continuous for mixed language
+        interimResults: true, // Always interim results for better detection
+        dialect: `${baseConfig.dialect} + Mixed Language Support`
+      };
+    }
+    
+    return baseConfig;
+  }, [getLanguageConfig]);
+
   // Check if we're in production
   useEffect(() => {
     setIsProduction(window.location.hostname !== 'localhost' && window.location.hostname !== '127.0.0.1');
@@ -188,6 +280,13 @@ export default function MicrophoneRecorder({
     accumulatedTranscriptRef.current = '';
     setRetryCount(0);
     setLastError(null);
+    
+    // NEW: Reset cross-language recognition state
+    setCurrentDetectedLanguage('');
+    setIsMixedLanguage(false);
+    setLanguageSwitchCount(0);
+    setLastLanguageSwitch(null);
+    
     onClearTranscription();
   }, [onClearTranscription]);
 
@@ -224,20 +323,24 @@ export default function MicrophoneRecorder({
       const languageConfig = getLanguageConfig(sourceLanguage);
       const dialectInfo = detectAndFallbackLanguage(sourceLanguage);
       
+      // NEW: Get optimal configuration for cross-language recognition
+      const optimalConfig = getOptimalLanguageConfig(sourceLanguage, [sourceLanguage]);
+      
       // Configure recognition settings with language-specific optimizations
-      recognition.continuous = languageConfig.continuous;
-      recognition.interimResults = languageConfig.interimResults;
-      recognition.maxAlternatives = languageConfig.maxAlternatives;
+      recognition.continuous = optimalConfig.continuous;
+      recognition.interimResults = optimalConfig.interimResults;
+      recognition.maxAlternatives = optimalConfig.maxAlternatives;
       
       // Set language based on source language with dialect support
       recognition.lang = dialectInfo.primary;
       
-      console.log(`Enhanced Web Speech API started for ${dialectInfo.primary} (${languageConfig.dialect})`);
+      console.log(`Enhanced Web Speech API started for ${dialectInfo.primary} (${optimalConfig.dialect})`);
       console.log(`Fallback options: ${dialectInfo.fallbacks.join(', ')}`);
+      console.log(`🌍 Cross-language support: ${optimalConfig.dialect.includes('Mixed Language') ? 'Enabled' : 'Standard'}`);
 
       // Set up enhanced event handlers
       recognition.onstart = () => {
-        console.log(`Speech recognition start() called for ${languageConfig.dialect}`);
+        console.log(`Speech recognition start() called for ${optimalConfig.dialect}`);
         // FIXED: Set recording state and enable button immediately so user can stop
         setIsRecording(true);
         setIsProcessing(false);
@@ -246,22 +349,22 @@ export default function MicrophoneRecorder({
 
       // FIXED: Add onaudiostart to keep audio stream active
       recognition.onaudiostart = () => {
-        console.log(`Audio stream started for ${languageConfig.dialect}`);
+        console.log(`Audio stream started for ${optimalConfig.dialect}`);
       };
 
       // FIXED: Add onaudiostart to keep audio stream active
       recognition.onaudioend = () => {
-        console.log(`Audio stream ended for ${languageConfig.dialect}`);
+        console.log(`Audio stream ended for ${optimalConfig.dialect}`);
         // Don't stop recognition, let it continue
       };
 
       // FIXED: Add speech event handlers for better control
       recognition.onspeechstart = () => {
-        console.log(`Speech detected for ${languageConfig.dialect}`);
+        console.log(`Speech detected for ${optimalConfig.dialect}`);
       };
 
       recognition.onspeechend = () => {
-        console.log(`Speech ended for ${languageConfig.dialect}, but continuing to listen...`);
+        console.log(`Speech ended for ${optimalConfig.dialect}, but continuing to listen...`);
         // Don't stop recognition, let it continue listening
       };
 
@@ -289,10 +392,49 @@ export default function MicrophoneRecorder({
           }
         }
 
-        // Enhanced transcript processing with confidence tracking
+        // NEW: Enhanced transcript processing with cross-language recognition
         if (finalTranscript) {
           const avgConfidence = confidenceScores.reduce((a, b) => a + b, 0) / confidenceScores.length;
           console.log(`Final transcript confidence: ${(avgConfidence * 100).toFixed(1)}%`);
+          
+          // NEW: Cross-language detection and analysis
+          const languageAnalysis = detectLanguageInText(finalTranscript);
+          const currentAccumulated = accumulatedTranscriptRef.current;
+          
+          // NEW: Update cross-language recognition state
+          setCurrentDetectedLanguage(languageAnalysis.primary);
+          setIsMixedLanguage(languageAnalysis.isMixed);
+          
+          // NEW: Detect language switching
+          if (currentAccumulated) {
+            const languageSwitch = detectLanguageSwitch(currentAccumulated, finalTranscript);
+            if (languageSwitch.switched && languageSwitch.to && languageSwitch.confidence) {
+              console.log(`🔄 Language switch detected: ${languageSwitch.from} → ${languageSwitch.to}`);
+              console.log(`📊 Switch confidence: ${languageSwitch.confidence.toFixed(1)}%`);
+              console.log(`🌍 Mixed language: ${languageSwitch.isMixed ? 'Yes' : 'No'}`);
+              
+              // NEW: Update language switch state
+              setLanguageSwitchCount(prev => prev + 1);
+              setLastLanguageSwitch({
+                from: languageSwitch.from,
+                to: languageSwitch.to,
+                confidence: languageSwitch.confidence
+              });
+              
+              // Notify user about language switch
+              if (isProduction) {
+                onTranslation(`Language detected: ${languageSwitch.to.toUpperCase()} (${languageSwitch.confidence.toFixed(0)}% confidence)`);
+              } else {
+                onTranslation(`🔄 Language switched from ${languageSwitch.from} to ${languageSwitch.to} (${languageSwitch.confidence.toFixed(1)}% confidence)`);
+              }
+            }
+          }
+          
+          // NEW: Enhanced language analysis logging
+          console.log(`🌍 Language Analysis for: "${finalTranscript}"`);
+          console.log(`📊 Primary: ${languageAnalysis.primary} (${languageAnalysis.confidence.toFixed(1)}%)`);
+          console.log(`🔀 Mixed: ${languageAnalysis.isMixed ? 'Yes' : 'No'}`);
+          console.log(`📈 Percentages:`, languageAnalysis.percentages.map(l => `${l.language}: ${l.percentage.toFixed(1)}%`));
           
           accumulatedTranscriptRef.current += finalTranscript + ' ';
           onTranscription(accumulatedTranscriptRef.current.trim(), true);
@@ -324,13 +466,13 @@ export default function MicrophoneRecorder({
           let userMessage = '';
           switch (event.error) {
             case 'network':
-              userMessage = `Network error for ${languageConfig.dialect} - speech recognition may be limited`;
+              userMessage = `Network error for ${optimalConfig.dialect} - speech recognition may be limited`;
               break;
             case 'not-allowed':
               userMessage = 'Microphone access denied. Please allow microphone permissions.';
               break;
             case 'aborted':
-              userMessage = `Speech recognition for ${languageConfig.dialect} was aborted`;
+              userMessage = `Speech recognition for ${optimalConfig.dialect} was aborted`;
               break;
             case 'audio-capture':
               userMessage = 'Audio capture error - please check your microphone.';
@@ -339,11 +481,11 @@ export default function MicrophoneRecorder({
               userMessage = 'Speech recognition service not allowed. Please check browser settings.';
               break;
             default:
-              userMessage = `Speech recognition error for ${languageConfig.dialect}: ${event.error}`;
+              userMessage = `Speech recognition error for ${optimalConfig.dialect}: ${event.error}`;
           }
           onTranslation(userMessage);
         } else {
-          onTranslation(`Enhanced Error for ${languageConfig.dialect}: ${event.error}`);
+          onTranslation(`Enhanced Error for ${optimalConfig.dialect}: ${event.error}`);
         }
         
         // FIXED: For critical errors, restart recognition instead of stopping
@@ -361,7 +503,7 @@ export default function MicrophoneRecorder({
       };
 
       recognition.onend = () => {
-        console.log(`Enhanced speech recognition ended for ${languageConfig.dialect}`);
+        console.log(`Enhanced speech recognition ended for ${optimalConfig.dialect}`);
         isRecognitionRunningRef.current = false;
         
         // FIXED: Don't restart if user manually stopped
@@ -400,7 +542,7 @@ export default function MicrophoneRecorder({
 
       // FIXED: Add onnomatch handler to continue listening when no match found
       recognition.onnomatch = () => {
-        console.log(`No match found for ${languageConfig.dialect}, continuing to listen...`);
+        console.log(`No match found for ${optimalConfig.dialect}, continuing to listen...`);
         // Don't stop recognition, let it continue listening
       };
 
@@ -727,6 +869,46 @@ export default function MicrophoneRecorder({
                 Reset & Try Again
               </button>
             )}
+          </div>
+        </div>
+      </div>
+
+      {/* NEW: Cross-Language Recognition Status */}
+      <div className="w-full max-w-md bg-purple-50 dark:bg-purple-900/20 border border-purple-200 dark:border-purple-800 rounded-lg p-4">
+        <div className="flex items-start space-x-3">
+          <div className="flex-shrink-0">
+            <svg className="w-5 h-5 text-purple-600 dark:text-purple-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 12a9 9 0 01-9 9m9-9a9 9 0 00-9-9m9 9H3m9 9v-9m0-9v9m0 9l-9-9m9 9l9-9" />
+            </svg>
+          </div>
+          <div className="flex-1">
+            <p className="text-sm font-medium text-purple-800 dark:text-purple-200">
+              Cross-Language Recognition
+            </p>
+            <div className="mt-2 text-xs text-purple-700 dark:text-purple-300 space-y-1">
+              <p>🌍 <span className="font-medium">Detected Language</span>: <span className="font-medium text-purple-600">
+                {currentDetectedLanguage ? 
+                  (currentDetectedLanguage === 'arabic' ? 'العربية (Arabic)' : 
+                   currentDetectedLanguage === 'bengali' ? 'বাংলা (Bengali)' : 
+                   currentDetectedLanguage === 'english' ? 'English' : 
+                   currentDetectedLanguage === 'unknown' ? 'Unknown' : currentDetectedLanguage)
+                : 'Not detected yet'}
+              </span></p>
+              <p>🔀 <span className="font-medium">Mixed Language</span>: <span className="font-medium text-purple-600">
+                {isMixedLanguage ? 'Yes - Multiple languages detected' : 'No - Single language'}
+              </span></p>
+              <p>🔄 <span className="font-medium">Language Switches</span>: <span className="font-medium text-purple-600">
+                {languageSwitchCount} detected
+              </span></p>
+              {lastLanguageSwitch && (
+                <p>📊 <span className="font-medium">Last Switch</span>: <span className="font-medium text-purple-600">
+                  {lastLanguageSwitch.from} → {lastLanguageSwitch.to} ({lastLanguageSwitch.confidence.toFixed(1)}% confidence)
+                </span></p>
+              )}
+              <p>⚡ <span className="font-medium">Status</span>: <span className="font-medium text-purple-600">
+                {isRecording ? 'Active - Monitoring for language changes' : 'Inactive - Start recording to enable'}
+              </span></p>
+            </div>
           </div>
         </div>
       </div>
