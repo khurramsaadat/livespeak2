@@ -11,6 +11,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
+import { useRTL } from "@/lib/use-rtl";
 
 export default function Home() {
   const [transcription, setTranscription] = useState("");
@@ -29,6 +30,9 @@ export default function Home() {
   const [retryCount, setRetryCount] = useState(0);
   const [maxRetries] = useState(50);
   const [lastError, setLastError] = useState<string | null>(null);
+
+  // RTL and language-specific styling
+  const rtlConfig = useRTL(sourceLanguage);
 
   const handleTranscriptionUpdate = (newSegment: string, isFinal: boolean) => {
     if (isFinal) {
@@ -95,27 +99,27 @@ export default function Home() {
   };
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-blue-50 via-white to-purple-50 dark:from-gray-900 dark:via-gray-800 dark:to-gray-900">
+    <div className={`min-h-screen bg-gradient-to-br from-blue-50 via-white to-purple-50 dark:from-gray-900 dark:via-gray-800 dark:to-gray-900 ${rtlConfig.fontFamily}`} dir={rtlConfig.direction}>
       {/* Header */}
       <div className="bg-white/80 dark:bg-gray-800/80 backdrop-blur-sm border-b border-gray-200 dark:border-gray-700 sticky top-0 z-10">
         <div className="max-w-6xl mx-auto px-4 py-6">
-          <div className="flex items-center justify-between">
-            <div className="flex items-center space-x-3">
+          <div className={`flex items-center ${rtlConfig.direction === 'rtl' ? 'flex-row-reverse' : 'justify-between'}`}>
+            <div className={`flex items-center ${rtlConfig.direction === 'rtl' ? 'space-x-reverse space-x-3' : 'space-x-3'}`}>
               <div className="w-10 h-10 bg-gradient-to-r from-blue-500 to-purple-600 rounded-xl flex items-center justify-center">
                 <svg className="w-6 h-6 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 11a7 7 0 01-7 7m0 0a7 7 0 01-7-7m7 7v4m0 0H8m4 0h4m-4-8a3 3 0 01-3-3V5a3 3 0 116 0v6a3 3 0 01-3 3z" />
                 </svg>
               </div>
-              <div>
-                <h1 className="text-3xl font-bold bg-gradient-to-r from-blue-600 to-purple-600 bg-clip-text text-transparent">
+              <div className={`text-${rtlConfig.textAlign}`}>
+                <h1 className={`text-3xl font-bold bg-gradient-to-r from-blue-600 to-purple-600 bg-clip-text text-transparent ${rtlConfig.textSize}`}>
                   LiveSpeak
                 </h1>
-                <p className="text-sm text-gray-600 dark:text-gray-400">Real-time Speech Recognition</p>
+                <p className={`text-sm text-gray-600 dark:text-gray-400 ${rtlConfig.textSize}`}>Real-time Speech Recognition</p>
               </div>
             </div>
-            <div className="flex items-center space-x-2">
+            <div className={`flex items-center ${rtlConfig.direction === 'rtl' ? 'space-x-reverse space-x-2' : 'space-x-2'}`}>
               <div className="w-3 h-3 bg-green-500 rounded-full animate-pulse"></div>
-              <span className="text-sm text-gray-600 dark:text-gray-400">Ready</span>
+              <span className={`text-sm text-gray-600 dark:text-gray-400 ${rtlConfig.textSize}`}>Ready</span>
             </div>
           </div>
         </div>
@@ -123,18 +127,18 @@ export default function Home() {
 
       {/* Main Content */}
       <div className="max-w-6xl mx-auto px-4 py-8">
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-8 mb-8">
+        <div className={`grid grid-cols-1 lg:grid-cols-2 gap-8 mb-8 ${rtlConfig.direction === 'rtl' ? 'rtl' : ''}`}>
           {/* Transcription Card */}
           <Card className="bg-white/80 dark:bg-gray-800/80 backdrop-blur-sm border-0 shadow-xl">
             <CardHeader className="pb-2">
-              <div className="flex items-center justify-between">
-                <CardTitle className="flex items-center space-x-2">
+              <div className={`flex items-center ${rtlConfig.direction === 'rtl' ? 'flex-row-reverse justify-between' : 'justify-between'}`}>
+                <CardTitle className={`flex items-center ${rtlConfig.direction === 'rtl' ? 'space-x-reverse space-x-2' : 'space-x-2'}`}>
                   <div className="w-8 h-8 bg-blue-100 dark:bg-blue-900/30 rounded-lg flex items-center justify-center">
                     <svg className="w-5 h-5 text-blue-600 dark:text-blue-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 11a7 7 0 01-7 7m0 0a7 7 0 01-7-7m7 7v4m0 0H8m4 0h4m-4-8a3 3 0 01-3-3V5a3 3 0 116 0v6a3 3 0 01-3 3z" />
                     </svg>
                   </div>
-                  <span className="text-sm">Live Transcription</span>
+                  <span className={`text-sm ${rtlConfig.textSize}`}>Live Transcription</span>
                 </CardTitle>
                 {transcription && (
                   <button
@@ -152,25 +156,25 @@ export default function Home() {
               <div className="min-h-[200px] p-4 bg-gray-50 dark:bg-gray-900/50 rounded-lg border border-gray-200 dark:border-gray-700">
                 <div className="h-full flex items-center justify-center">
                   {interimTranscription ? (
-                    <div className="text-center">
-                      <div className="flex items-center justify-center space-x-2 mb-3">
+                    <div className={`text-center ${rtlConfig.textAlign === 'right' ? 'text-right' : 'text-left'}`}>
+                      <div className={`flex items-center justify-center ${rtlConfig.direction === 'rtl' ? 'space-x-reverse space-x-2' : 'space-x-2'} mb-3`}>
                         <div className="w-2 h-2 bg-blue-500 rounded-full animate-pulse"></div>
                         <div className="w-2 h-2 bg-blue-500 rounded-full animate-pulse" style={{ animationDelay: '0.2s' }}></div>
                         <div className="w-2 h-2 bg-blue-500 rounded-full animate-pulse" style={{ animationDelay: '0.4s' }}></div>
                       </div>
-                      <p className="text-sm text-gray-700 dark:text-gray-300 italic">
+                      <p className={`text-sm text-gray-700 dark:text-gray-300 italic ${rtlConfig.textSize} ${rtlConfig.lineHeight}`}>
                         {interimTranscription}
                       </p>
-                      <p className="text-xs text-gray-500 dark:text-gray-400 mt-2">Listening...</p>
+                      <p className={`text-xs text-gray-500 dark:text-gray-400 mt-2 ${rtlConfig.textSize}`}>Listening...</p>
                     </div>
                   ) : transcription ? (
-                    <div className="text-center">
+                    <div className={`text-center ${rtlConfig.textAlign === 'right' ? 'text-right' : 'text-left'}`}>
                       <div className="w-12 h-12 bg-green-100 dark:bg-green-900/30 rounded-full flex items-center justify-center mx-auto mb-3">
                         <svg className="w-6 h-6 text-green-600 dark:text-green-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                           <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
                         </svg>
                       </div>
-                      <p className="text-sm text-gray-900 dark:text-gray-100 leading-relaxed">
+                      <p className={`text-sm text-gray-900 dark:text-gray-100 ${rtlConfig.textSize} ${rtlConfig.lineHeight} ${rtlConfig.letterSpacing}`}>
                         {transcription}
                       </p>
                       <button
@@ -187,14 +191,14 @@ export default function Home() {
                       )}
                     </div>
                   ) : (
-                    <div className="text-center">
+                    <div className={`text-center ${rtlConfig.textAlign === 'right' ? 'text-right' : 'text-left'}`}>
                       <div className="w-16 h-16 bg-gray-100 dark:bg-gray-700 rounded-full flex items-center justify-center mx-auto mb-4">
                         <svg className="w-8 h-8 text-gray-400 dark:text-gray-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                           <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z" />
                         </svg>
                       </div>
-                      <p className="text-gray-500 dark:text-gray-400 text-sm">Start speaking to see transcription</p>
-                      <p className="text-gray-400 dark:text-gray-500 text-xs mt-1">Click the record button below</p>
+                      <p className={`text-gray-500 dark:text-gray-400 ${rtlConfig.textSize} ${rtlConfig.lineHeight}`}>Start speaking to see transcription</p>
+                      <p className={`text-gray-400 dark:text-gray-500 text-xs mt-1 ${rtlConfig.textSize}`}>Click the record button below</p>
                     </div>
                   )}
                 </div>
@@ -205,26 +209,26 @@ export default function Home() {
           {/* Translation Card */}
           <Card className="bg-white/80 dark:bg-gray-800/80 backdrop-blur-sm border-0 shadow-xl">
             <CardHeader className="pb-2">
-              <CardTitle className="flex items-center space-x-2">
+              <CardTitle className={`flex items-center ${rtlConfig.direction === 'rtl' ? 'space-x-reverse space-x-2' : 'space-x-2'}`}>
                 <div className="w-8 h-8 bg-purple-100 dark:bg-purple-900/30 rounded-lg flex items-center justify-center">
                   <svg className="w-5 h-5 text-purple-600 dark:text-purple-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 5h12M9 3v2m1.048 9.304A2.968 2.968 0 0112 15a2.968 2.968 0 01-.952 1.304m-1.048 9.304L9 21l-1.048-5.696M12 15a2.968 2.968 0 01-.952-1.304M12 15a2.968 2.968 0 00-.952 1.304M12 15a2.968 2.968 0 01-.952-1.304M12 15a2.968 2.968 0 00-.952 1.304" />
                   </svg>
                 </div>
-                <span className="text-sm">Translation</span>
+                <span className={`text-sm ${rtlConfig.textSize}`}>Translation</span>
               </CardTitle>
             </CardHeader>
             <CardContent className="pt-0">
               <div className="min-h-[200px] p-4 bg-gray-50 dark:bg-gray-900/50 rounded-lg border border-gray-200 dark:border-gray-700">
                 <div className="h-full flex items-center justify-center">
                   {translation ? (
-                    <div className="text-center">
+                    <div className={`text-center ${rtlConfig.textAlign === 'right' ? 'text-right' : 'text-left'}`}>
                       <div className="w-12 h-12 bg-purple-100 dark:bg-purple-900/30 rounded-full flex items-center justify-center mx-auto mb-3">
                         <svg className="w-6 h-6 text-purple-600 dark:text-purple-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 5h12M9 3v2m1.048 9.304A2.968 2.968 0 0112 15a2.968 2.968 0 01-.952 1.304m-1.048 9.304L9 21l-1.048-5.696M12 15a2.968 2.968 0 01-.952-1.304M12 15a2.968 2.968 0 00-.952 1.304M12 15a2.968 2.968 0 01-.952-1.304M12 15a2.968 2.968 0 00-.952 1.304" />
                         </svg>
                       </div>
-                      <p className="text-sm text-gray-900 dark:text-gray-100 leading-relaxed">
+                      <p className={`text-sm text-gray-900 dark:text-gray-100 ${rtlConfig.textSize} ${rtlConfig.lineHeight} ${rtlConfig.letterSpacing}`}>
                         {translation}
                       </p>
                       <button
@@ -241,14 +245,14 @@ export default function Home() {
                       )}
                     </div>
                   ) : (
-                    <div className="text-center">
+                    <div className={`text-center ${rtlConfig.textAlign === 'right' ? 'text-right' : 'text-left'}`}>
                       <div className="w-16 h-16 bg-gray-100 dark:bg-gray-700 rounded-full flex items-center justify-center mx-auto mb-4">
                         <svg className="w-8 h-8 text-gray-400 dark:text-gray-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                           <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 5h12M9 3v2m1.048 9.304A2.968 2.968 0 0112 15a2.968 2.968 0 01-.952 1.304m-1.048 9.304L9 21l-1.048-5.696M12 15a2.968 2.968 0 01-.952-1.304M12 15a2.968 2.968 0 00-.952 1.304M12 15a2.968 2.968 0 01-.952-1.304M12 15a2.968 2.968 0 00-.952 1.304" />
                         </svg>
                       </div>
-                      <p className="text-gray-500 dark:text-gray-400 text-sm">Translation will appear here</p>
-                      <p className="text-gray-400 dark:text-gray-500 text-xs mt-1">After you start speaking</p>
+                      <p className={`text-gray-500 dark:text-gray-400 ${rtlConfig.textSize} ${rtlConfig.lineHeight}`}>Translation will appear here</p>
+                      <p className={`text-gray-400 dark:text-gray-500 text-xs mt-1 ${rtlConfig.textSize}`}>After you start speaking</p>
                     </div>
                   )}
                 </div>
@@ -258,16 +262,16 @@ export default function Home() {
         </div>
 
         {/* Language Settings */}
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-8">
+        <div className={`grid grid-cols-1 md:grid-cols-2 gap-6 mb-8 ${rtlConfig.direction === 'rtl' ? 'rtl' : ''}`}>
           <Card className="bg-white/80 dark:bg-gray-800/80 backdrop-blur-sm border-0 shadow-lg">
             <CardHeader className="pb-2">
-              <CardTitle className="text-lg flex items-center space-x-2">
+              <CardTitle className={`text-lg flex items-center ${rtlConfig.direction === 'rtl' ? 'space-x-reverse space-x-2' : 'space-x-2'}`}>
                 <div className="w-8 h-8 bg-blue-100 dark:bg-blue-900/30 rounded-lg flex items-center justify-center">
                   <svg className="w-5 h-5 text-blue-600 dark:text-blue-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 5h12M9 3v2m1.048 9.304A2.968 2.968 0 0112 15a2.968 2.968 0 01-.952 1.304m-1.048 9.304L9 21l-1.048-5.696M12 15a2.968 2.968 0 01-.952-1.304M12 15a2.968 2.968 0 00-.952 1.304M12 15a2.968 2.968 0 01-.952-1.304M12 15a2.968 2.968 0 00-.952 1.304" />
                   </svg>
                 </div>
-                <span>Source Language</span>
+                <span className={rtlConfig.textSize}>Source Language</span>
               </CardTitle>
             </CardHeader>
             <CardContent className="pt-0">
@@ -277,7 +281,7 @@ export default function Home() {
                 </SelectTrigger>
                 <SelectContent>
                   <SelectItem value="en">
-                    <div className="flex items-center space-x-3">
+                    <div className={`flex items-center ${rtlConfig.direction === 'rtl' ? 'space-x-reverse space-x-3' : 'space-x-3'}`}>
                       <div className="w-6 h-4 bg-gradient-to-r from-blue-600 to-red-600 rounded-sm flex items-center justify-center">
                         <span className="text-white text-xs font-bold">US</span>
                       </div>
@@ -288,7 +292,7 @@ export default function Home() {
                     </div>
                   </SelectItem>
                   <SelectItem value="ar">
-                    <div className="flex items-center space-x-3">
+                    <div className={`flex items-center ${rtlConfig.direction === 'rtl' ? 'space-x-reverse space-x-3' : 'space-x-3'}`}>
                       <div className="w-6 h-4 bg-gradient-to-r from-green-600 to-white to-black rounded-sm flex items-center justify-center">
                         <span className="text-xs">🇸🇦</span>
                       </div>
@@ -299,7 +303,7 @@ export default function Home() {
                     </div>
                   </SelectItem>
                   <SelectItem value="bn">
-                    <div className="flex items-center space-x-3">
+                    <div className={`flex items-center ${rtlConfig.direction === 'rtl' ? 'space-x-reverse space-x-3' : 'space-x-3'}`}>
                       <div className="w-6 h-4 bg-gradient-to-r from-green-600 to-red-600 rounded-sm flex items-center justify-center">
                         <span className="text-xs">🇧🇩</span>
                       </div>
@@ -316,13 +320,13 @@ export default function Home() {
 
           <Card className="bg-white/80 dark:bg-gray-800/80 backdrop-blur-sm border-0 shadow-lg">
             <CardHeader className="pb-2">
-              <CardTitle className="text-lg flex items-center space-x-2">
+              <CardTitle className={`text-lg flex items-center ${rtlConfig.direction === 'rtl' ? 'space-x-reverse space-x-2' : 'space-x-2'}`}>
                 <div className="w-8 h-8 bg-purple-100 dark:bg-purple-900/30 rounded-lg flex items-center justify-center">
                   <svg className="w-5 h-5 text-purple-600 dark:text-purple-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 5h12M9 3v2m1.048 9.304A2.968 2.968 0 0112 15a2.968 2.968 0 01-.952 1.304m-1.048 9.304L9 21l-1.048-5.696M12 15a2.968 2.968 0 01-.952-1.304M12 15a2.968 2.968 0 00-.952 1.304M12 15a2.968 2.968 0 01-.952-1.304M12 15a2.968 2.968 0 00-.952 1.304" />
                   </svg>
                 </div>
-                <span>Target Language</span>
+                <span className={rtlConfig.textSize}>Target Language</span>
               </CardTitle>
             </CardHeader>
             <CardContent className="pt-0">
@@ -332,7 +336,7 @@ export default function Home() {
                 </SelectTrigger>
                 <SelectContent>
                   <SelectItem value="en">
-                    <div className="flex items-center space-x-3">
+                    <div className={`flex items-center ${rtlConfig.direction === 'rtl' ? 'space-x-reverse space-x-3' : 'space-x-3'}`}>
                       <div className="w-6 h-4 bg-gradient-to-r from-blue-600 to-red-600 rounded-sm flex items-center justify-center">
                         <span className="text-white text-xs font-bold">US</span>
                       </div>
@@ -343,7 +347,7 @@ export default function Home() {
                     </div>
                   </SelectItem>
                   <SelectItem value="ar">
-                    <div className="flex items-center space-x-3">
+                    <div className={`flex items-center ${rtlConfig.direction === 'rtl' ? 'space-x-reverse space-x-3' : 'space-x-3'}`}>
                       <div className="w-6 h-4 bg-gradient-to-r from-green-600 to-white to-black rounded-sm flex items-center justify-center">
                         <span className="text-xs">🇸🇦</span>
                       </div>
@@ -354,7 +358,7 @@ export default function Home() {
                     </div>
                   </SelectItem>
                   <SelectItem value="bn">
-                    <div className="flex items-center space-x-3">
+                    <div className={`flex items-center ${rtlConfig.direction === 'rtl' ? 'space-x-reverse space-x-3' : 'space-x-3'}`}>
                       <div className="w-6 h-4 bg-gradient-to-r from-green-600 to-red-600 rounded-sm flex items-center justify-center">
                         <span className="text-xs">🇧🇩</span>
                       </div>

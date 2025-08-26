@@ -473,7 +473,7 @@ export default function MicrophoneRecorder({
               // Notify user about language switch
               if (isProduction) {
                 onTranslation(`Language detected: ${languageSwitch.to.toUpperCase()} (${languageSwitch.confidence.toFixed(0)}% confidence)`);
-              } else {
+        } else {
                 onTranslation(`🔄 Language switched from ${languageSwitch.from} to ${languageSwitch.to} (${languageSwitch.confidence.toFixed(1)}% confidence)`);
               }
             }

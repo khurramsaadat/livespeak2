@@ -3,6 +3,9 @@
 
 @custom-variant dark (&:is(.dark *));
 
+/* Import Google Fonts for multilingual support */
+@import url('https://fonts.googleapis.com/css2?family=Noto+Sans+Arabic:wght@300;400;500;600;700&family=Noto+Sans+Bengali:wght@300;400;500;600;700&display=swap');
+
 @theme inline {
   --color-background: var(--background);
   --color-foreground: var(--foreground);
@@ -118,5 +121,138 @@
   }
   body {
     @apply bg-background text-foreground;
+  }
+}
+
+/* RTL Support and Language-Specific Typography */
+@layer utilities {
+  /* RTL Direction Support */
+  .rtl {
+    direction: rtl;
+    text-align: right;
+  }
+  
+  .ltr {
+    direction: ltr;
+    text-align: left;
+  }
+  
+  /* Arabic Typography */
+  .font-arabic {
+    font-family: 'Noto Sans Arabic', 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+    font-feature-settings: 'kern' 1, 'liga' 1, 'calt' 1;
+    line-height: 1.6;
+    letter-spacing: 0.01em;
+  }
+  
+  /* Bengali Typography */
+  .font-bengali {
+    font-family: 'Noto Sans Bengali', 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+    font-feature-settings: 'kern' 1, 'liga' 1, 'calt' 1;
+    line-height: 1.7;
+    letter-spacing: 0.005em;
+  }
+  
+  /* English Typography (default) */
+  .font-english {
+    font-family: var(--font-sans), 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+    line-height: 1.5;
+    letter-spacing: 0.01em;
+  }
+  
+  /* RTL-specific spacing adjustments */
+  .rtl .space-x-reverse > :not([hidden]) ~ :not([hidden]) {
+    --tw-space-x-reverse: 1;
+  }
+  
+  .rtl .space-y-reverse > :not([hidden]) ~ :not([hidden]) {
+    --tw-space-y-reverse: 1;
+  }
+  
+  /* RTL flex direction adjustments */
+  .rtl .flex-row-reverse {
+    flex-direction: row-reverse;
+  }
+  
+  /* RTL margin and padding adjustments */
+  .rtl .ml-auto {
+    margin-left: unset;
+    margin-right: auto;
+  }
+  
+  .rtl .mr-auto {
+    margin-right: unset;
+    margin-left: auto;
+  }
+  
+  /* RTL text alignment */
+  .rtl .text-left {
+    text-align: right;
+  }
+  
+  .rtl .text-right {
+    text-align: left;
+  }
+  
+  /* RTL border radius adjustments for cards */
+  .rtl .rounded-l-lg {
+    border-top-left-radius: unset;
+    border-bottom-left-radius: unset;
+    border-top-right-radius: 0.5rem;
+    border-bottom-right-radius: 0.5rem;
+  }
+  
+  .rtl .rounded-r-lg {
+    border-top-right-radius: unset;
+    border-bottom-right-radius: unset;
+    border-top-left-radius: 0.5rem;
+    border-bottom-left-radius: 0.5rem;
+  }
+  
+  /* Language-specific text sizing */
+  .text-arabic {
+    font-size: 1.1em;
+    line-height: 1.8;
+  }
+  
+  .text-bengali {
+    font-size: 1.05em;
+    line-height: 1.75;
+  }
+  
+  /* RTL grid adjustments */
+  .rtl .grid-cols-1.lg\:grid-cols-2 > *:first-child {
+    order: 2;
+  }
+  
+  .rtl .grid-cols-1.lg\:grid-cols-2 > *:last-child {
+    order: 1;
+  }
+  
+  /* RTL button and icon positioning */
+  .rtl .justify-between {
+    flex-direction: row-reverse;
+  }
+  
+  .rtl .space-x-3 > :not([hidden]) ~ :not([hidden]) {
+    margin-left: unset;
+    margin-right: 0.75rem;
+  }
+  
+  /* RTL footer grid adjustments */
+  .rtl .grid-cols-1.md\:grid-cols-2.lg\:grid-cols-4 > *:nth-child(1) {
+    order: 4;
+  }
+  
+  .rtl .grid-cols-1.md\:grid-cols-2.lg\:grid-cols-4 > *:nth-child(2) {
+    order: 3;
+  }
+  
+  .rtl .grid-cols-1.md\:grid-cols-2.lg\:grid-cols-4 > *:nth-child(3) {
+    order: 2;
+  }
+  
+  .rtl .grid-cols-1.md\:grid-cols-2.lg\:grid-cols-4 > *:nth-child(4) {
+    order: 1;
   }
 }
