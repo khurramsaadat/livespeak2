@@ -124,102 +124,98 @@ export default function MicrophoneRecorder({
     const languageMap: { [key: string]: string } = {
       'en': 'en-US',
       'ar': 'ar-SA', // Saudi Arabic as default
-      'bn': 'bn-BD', // Bangladesh Bengali as default
       'ar-SA': 'ar-SA', // Saudi Arabic
       'ar-EG': 'ar-EG', // Egyptian Arabic
-      'ar-PS': 'ar-PS', // Palestinian Arabic
-      'bn-BD': 'bn-BD', // Bangladesh Bengali
-      'bn-IN': 'bn-IN'  // Indian Bengali
+      'ar-PS': 'ar-PS'  // Palestinian Arabic
     };
     
     return languageMap[language] || 'en-US';
   }, []);
 
-  // Enhanced language-specific recognition configuration
+  // Enhanced language-specific recognition configuration with fallback support
   const getLanguageConfig = useCallback((language: string) => {
-    const configs: { [key: string]: { continuous: boolean; interimResults: boolean; maxAlternatives: number; dialect: string } } = {
+    const configs: { [key: string]: { continuous: boolean; interimResults: boolean; maxAlternatives: number; dialect: string; fallbackToEnglish: boolean } } = {
       'en': {
         continuous: true,
         interimResults: true,
         maxAlternatives: 3,
-        dialect: 'US English'
+        dialect: 'US English',
+        fallbackToEnglish: false
       },
       'ar': {
         continuous: true,
         interimResults: true,
         maxAlternatives: 5, // Higher alternatives for Arabic dialects
-        dialect: 'Modern Standard Arabic'
+        dialect: 'Modern Standard Arabic',
+        fallbackToEnglish: false
       },
       'ar-SA': {
         continuous: true,
         interimResults: true,
         maxAlternatives: 5,
-        dialect: 'Saudi Arabic'
+        dialect: 'Saudi Arabic',
+        fallbackToEnglish: false
       },
       'ar-EG': {
         continuous: true,
         interimResults: true,
         maxAlternatives: 5,
-        dialect: 'Egyptian Arabic'
+        dialect: 'Egyptian Arabic',
+        fallbackToEnglish: false
       },
       'ar-PS': {
         continuous: true,
         interimResults: true,
         maxAlternatives: 5,
-        dialect: 'Palestinian Arabic'
+        dialect: 'Palestinian Arabic',
+        fallbackToEnglish: false
       },
-      'bn': {
-        continuous: true,
-        interimResults: true,
-        maxAlternatives: 4, // Higher alternatives for Bengali variations
-        dialect: 'Standard Bengali'
-      },
-      'bn-BD': {
-        continuous: true,
-        interimResults: true,
-        maxAlternatives: 4,
-        dialect: 'Bangladesh Bengali'
-      },
-      'bn-IN': {
-        continuous: true,
-        interimResults: true,
-        maxAlternatives: 4,
-        dialect: 'Indian Bengali'
-      }
+
     };
     
     return configs[language] || configs['en'];
   }, []);
 
-  // Enhanced dialect detection and fallback
+  // Enhanced dialect detection and fallback with language support checking
   const detectAndFallbackLanguage = useCallback((language: string) => {
     const primaryCode = getLanguageCode(language);
+    const languageConfig = getLanguageConfig(language);
+    
+    // Check if the language is supported by Web Speech API
+    const supportedLanguages = [
+      'en-US', 'en-GB', 'en-AU', 'en-CA', 'en-IN',
+      'ar-SA', 'ar-EG', 'ar-IL', 'ar-JO', 'ar-KW', 'ar-LB', 'ar-MA', 'ar-OM', 'ar-PS', 'ar-QA', 'ar-TN', 'ar-AE',
+      'hi-IN', 'ur-PK', 'fa-IR', 'tr-TR', 'he-IL', 'th-TH', 'ko-KR', 'ja-JP', 'zh-CN', 'zh-TW', 'zh-HK',
+      'es-ES', 'es-MX', 'es-AR', 'fr-FR', 'de-DE', 'it-IT', 'pt-BR', 'pt-PT', 'ru-RU', 'nl-NL', 'sv-SE', 'da-DK', 'no-NO', 'fi-FI'
+    ];
+    
+    const isSupported = supportedLanguages.includes(primaryCode);
+    
     const fallbackMap: { [key: string]: string[] } = {
       'ar': ['ar-SA', 'ar-EG', 'ar-PS'], // Arabic fallbacks
-      'bn': ['bn-BD', 'bn-IN'], // Bengali fallbacks
       'en': ['en-US'] // English fallbacks
     };
     
     return {
       primary: primaryCode,
       fallbacks: fallbackMap[language] || [primaryCode],
-      currentAttempt: 0
+      currentAttempt: 0,
+      isFallback: false,
+      originalLanguage: language
     };
-  }, [getLanguageCode]);
+  }, [getLanguageCode, getLanguageConfig]);
 
   // NEW: Cross-language recognition and code-switching support
   const detectLanguageInText = useCallback((text: string) => {
     // Language detection patterns
     const languagePatterns = {
       arabic: /[\u0600-\u06FF\u0750-\u077F\u08A0-\u08FF\uFB50-\uFDFF\uFE70-\uFEFF]/,
-      bengali: /[\u0980-\u09FF]/,
       english: /[a-zA-Z]/,
       numbers: /[0-9]/
     };
 
     const detectedLanguages: { [key: string]: number } = {
       arabic: 0,
-      bengali: 0,
       english: 0,
       numbers: 0
     };
@@ -366,6 +362,13 @@ export default function MicrophoneRecorder({
       
       // Set language based on source language with dialect support
       recognition.lang = dialectInfo.primary;
+      
+      // Show fallback message for Bengali users
+      if (dialectInfo.isFallback && (sourceLanguage === 'bn' || sourceLanguage.startsWith('bn-'))) {
+        console.log(`⚠️ Bengali not supported by Web Speech API, using English fallback`);
+        console.log(`💡 Users can speak in Bengali, but recognition will be in English`);
+        // You could show a user notification here
+      }
       
       console.log(`Enhanced Web Speech API started for ${dialectInfo.primary} (${optimalConfig.dialect})`);
       console.log(`Fallback options: ${dialectInfo.fallbacks.join(', ')}`);
@@ -1040,7 +1043,7 @@ export default function MicrophoneRecorder({
         {isRecording && (
           <div className="text-xs text-gray-500 dark:text-gray-400 mt-1 space-y-1">
             <p>
-              Speaking in {sourceLanguage === 'ar' ? 'العربية (Arabic)' : sourceLanguage === 'bn' ? 'বাংলা (Bengali)' : 'English (US)'}
+              Speaking in {sourceLanguage === 'ar' ? 'العربية (Arabic)' : 'English (US)'}
             </p>
             <p className="text-xs text-blue-500">
               Dialect: {getLanguageConfig(sourceLanguage).dialect}

@@ -21,15 +21,7 @@ export function useRTL(sourceLanguage: string): RTLConfig {
           lineHeight: 'leading-relaxed',
           letterSpacing: 'tracking-wide'
         };
-      case 'bn':
-        return {
-          direction: 'ltr',
-          textAlign: 'left',
-          fontFamily: 'font-bengali',
-          textSize: 'text-base', // Same size as English - no size changes
-          lineHeight: 'leading-relaxed',
-          letterSpacing: 'tracking-normal'
-        };
+      
       default:
         return {
           direction: 'ltr',
@@ -45,7 +37,7 @@ export function useRTL(sourceLanguage: string): RTLConfig {
 
 export function getRTLClasses(sourceLanguage: string): string {
   const direction = 'ltr'; // Always LTR - no layout flipping
-  const fontFamily = sourceLanguage === 'ar' ? 'font-arabic' : sourceLanguage === 'bn' ? 'font-bengali' : 'font-english';
+                const fontFamily = sourceLanguage === 'ar' ? 'font-arabic' : 'font-english';
   const textSize = 'text-base'; // Always same size - no size changes
   const lineHeight = 'leading-relaxed'; // Consistent line height for now, can be dynamic if needed
   const letterSpacing = sourceLanguage === 'ar' ? 'tracking-wide' : 'tracking-normal';

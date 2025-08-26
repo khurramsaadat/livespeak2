@@ -4,7 +4,7 @@
 @custom-variant dark (&:is(.dark *));
 
 /* Import Google Fonts for multilingual support */
-@import url('https://fonts.googleapis.com/css2?family=Noto+Sans+Arabic:wght@300;400;500;600;700&family=Noto+Sans+Bengali:wght@300;400;500;600;700&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=Noto+Sans+Arabic:wght@300;400;500;600;700&display=swap');
 
 @theme inline {
   --color-background: var(--background);
@@ -145,13 +145,7 @@
     letter-spacing: 0.01em;
   }
   
-  /* Bengali Typography */
-  .font-bengali {
-    font-family: 'Noto Sans Bengali', 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
-    font-feature-settings: 'kern' 1, 'liga' 1, 'calt' 1;
-    line-height: 1.7;
-    letter-spacing: 0.005em;
-  }
+
   
   /* English Typography (default) */
   .font-english {
@@ -215,10 +209,7 @@
     line-height: 1.8;
   }
   
-  .text-bengali {
-    font-size: 1.05em;
-    line-height: 1.75;
-  }
+
   
   /* RTL grid adjustments */
   .rtl .grid-cols-1.lg\:grid-cols-2 > *:first-child {

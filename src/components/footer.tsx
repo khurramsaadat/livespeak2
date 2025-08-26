@@ -77,7 +77,7 @@ export default function Footer({
                 </p>
                 <div className={`mt-2 text-xs text-blue-700 dark:text-blue-300 space-y-1 ${rtlConfig.textSize} ${rtlConfig.lineHeight}`}>
                   <p>Current Language: <span className="font-medium">
-                    {sourceLanguage === 'ar' ? 'العربية (Arabic)' : sourceLanguage === 'bn' ? 'বাংলা (Bengali)' : 'English (US)'}
+                    {sourceLanguage === 'ar' ? 'العربية (Arabic)' : 'English (US)'}
                   </span></p>
                   <p>Dialect: <span className="font-medium text-blue-600">{getLanguageConfig(sourceLanguage).dialect}</span></p>
                   <p>Language Code: <span className="font-medium">{getLanguageCode(sourceLanguage)}</span></p>
@@ -117,7 +117,6 @@ export default function Footer({
                   <p>🌍 <span className="font-medium">Detected Language</span>: <span className="font-medium text-purple-600">
                     {currentDetectedLanguage ? 
                       (currentDetectedLanguage === 'arabic' ? 'العربية (Arabic)' : 
-                       currentDetectedLanguage === 'bengali' ? 'বাংলা (Bengali)' : 
                        currentDetectedLanguage === 'english' ? 'English' : 
                        currentDetectedLanguage === 'unknown' ? 'Unknown' : currentDetectedLanguage)
                     : 'Not detected yet'}
@@ -155,10 +154,10 @@ export default function Footer({
                 </p>
                 <div className={`mt-2 text-xs text-orange-700 dark:text-orange-300 space-y-1 ${rtlConfig.textSize} ${rtlConfig.lineHeight}`}>
                   <p>🌍 <span className="font-medium">Source Language</span>: <span className="font-medium text-orange-600">
-                    {sourceLanguage === 'ar' ? 'العربية (Arabic)' : sourceLanguage === 'bn' ? 'বাংলা (Bengali)' : 'English (US)'}
+                    {sourceLanguage === 'ar' ? 'العربية (Arabic)' : 'English (US)'}
                   </span></p>
                   <p>🎯 <span className="font-medium">Target Language</span>: <span className="font-medium text-orange-600">
-                    {targetLanguage === 'ar' ? 'العربية (Arabic)' : targetLanguage === 'bn' ? 'বাংলা (Bengali)' : 'English (US)'}
+                    {targetLanguage === 'ar' ? 'العربية (Arabic)' : 'English (US)'}
                   </span></p>
                   <p>📚 <span className="font-medium">Translation Dictionary</span>: <span className="font-medium text-orange-600">
                     {sourceLanguage !== targetLanguage ? 'Enhanced with cultural context' : 'No translation needed'}
