@@ -181,10 +181,10 @@ export default function Footer({
         {/* Footer Credits */}
         <div className={`mt-8 pt-6 border-t border-gray-200 dark:border-gray-700 text-center ${rtlConfig.textAlign === 'right' ? 'text-right' : 'text-left'}`}>
           <p className={`text-sm text-gray-500 dark:text-gray-400 ${rtlConfig.textSize} ${rtlConfig.lineHeight}`}>
-            © 2024 LiveSpeak - Professional Real-time Speech Recognition & Translation Platform
+            © 2025 LiveSpeak - Professional Real-time Speech Recognition & Translation Platform
           </p>
           <p className={`text-xs text-gray-400 dark:text-gray-500 mt-1 ${rtlConfig.textSize}`}>
-            Built with Next.js 15.5.0 • Enhanced with Cross-Language Recognition • Powered by Web Speech API
+            Made with love • Khurram • Powered by Web Speech API
           </p>
         </div>
       </div>
